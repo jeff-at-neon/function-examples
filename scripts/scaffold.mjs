@@ -13,9 +13,10 @@
 import { generate } from "./lib/generate.mjs";
 import { SPECS as SPECS_11_15 } from "./specs-11-15.mjs";
 import { SPECS as SPECS_16_20 } from "./specs-16-20.mjs";
-import { SPECS as SPECS_21_25 } from "./specs-21-25.mjs";
+import { SPECS as SPECS_21_22 } from "./specs-21-22.mjs";
+import { SPECS as SPECS_23_25 } from "./specs-23-25.mjs";
 
-const all = [...SPECS_11_15, ...SPECS_16_20, ...SPECS_21_25];
+const all = [...SPECS_11_15, ...SPECS_16_20, ...SPECS_21_22, ...SPECS_23_25];
 
 const ranks = new Set();
 for (const spec of all) {

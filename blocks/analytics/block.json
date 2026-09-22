@@ -1,0 +1,54 @@
+{
+  "slug": "analytics",
+  "rank": 24,
+  "name": "Event Analytics",
+  "summary": "Event ingest, sessionization, and a funnel, retention, and cohort query pack over your own Postgres.",
+  "schema": "blocks_analytics",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres"
+  ],
+  "dependsOn": [
+    "queue"
+  ],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "ANALYTICS_SESSION_GAP_MINUTES",
+      "description": "Inactivity gap that ends a session. 30 is conventional; changing it changes every historical session count.",
+      "required": false,
+      "default": "30"
+    },
+    {
+      "name": "ANALYTICS_MAX_BATCH",
+      "description": "Events accepted per ingest request.",
+      "required": false,
+      "default": "1000"
+    },
+    {
+      "name": "ANALYTICS_RETENTION_DAYS",
+      "description": "Days raw events are kept. Rollups outlive them, so long-range trends survive the purge.",
+      "required": false,
+      "default": "400"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "13 1 * * *",
+      "functionPath": "/rollup",
+      "description": "Sessionize new events and refresh daily aggregates. Off-peak, because it scans a day of raw events."
+    }
+  ]
+}

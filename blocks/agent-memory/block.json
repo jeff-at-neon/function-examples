@@ -1,0 +1,72 @@
+{
+  "slug": "agent-memory",
+  "rank": 21,
+  "name": "Agent Memory Store",
+  "summary": "Session transcripts, summarization compaction, and retrieval for LLM agents — so a long conversation stays inside the context window.",
+  "schema": "blocks_agent_memory",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "pgvector",
+    "ai_gateway"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_AI_GATEWAY_API_KEY",
+      "description": "AI Gateway credential. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "MEMORY_COMPACT_AT_TOKENS",
+      "description": "Running token total at which the oldest turns are summarized. Should sit well below your model's window, leaving room for retrieval and the response.",
+      "required": false,
+      "default": "24000"
+    },
+    {
+      "name": "MEMORY_KEEP_RECENT_TURNS",
+      "description": "Turns always kept verbatim, never compacted. Recent exchanges carry the most relevant detail.",
+      "required": false,
+      "default": "10"
+    },
+    {
+      "name": "MEMORY_SUMMARY_MODEL",
+      "description": "Model used to summarize compacted turns.",
+      "required": false,
+      "default": "gpt-4o-mini"
+    },
+    {
+      "name": "MEMORY_EMBEDDING_MODEL",
+      "description": "Must stay consistent, or retrieval across a session is comparing incomparable vectors.",
+      "required": false,
+      "default": "text-embedding-3-small"
+    },
+    {
+      "name": "MEMORY_EMBEDDING_DIMENSIONS",
+      "description": "Must match the model and the vector column width.",
+      "required": false,
+      "default": "1536"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "*/10 * * * *",
+      "functionPath": "/compact",
+      "description": "Compact sessions that have crossed the token threshold. Scheduled rather than inline so a user-facing turn never waits on a summarization call."
+    }
+  ]
+}

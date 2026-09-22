@@ -1,0 +1,13 @@
+{
+  "name": "@neon-blocks/block-agent-memory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neon Block: agent memory store.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0",
+    "@neon-blocks/ai": "0.1.0"
+  }
+}

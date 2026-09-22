@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    {
+      "path": "packages/ai"
+    },
+    {
+      "path": "packages/cli"
+    },
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/events"
+    },
+    {
+      "path": "packages/migrate"
+    },
+    {
+      "path": "packages/queue"
+    },
+    {
+      "path": "packages/storage"
+    },
+    {
+      "path": "blocks/agent-memory"
+    },
+    {
+      "path": "blocks/analytics"
+    },
+    {
+      "path": "blocks/api-edge"
+    },
+    {
+      "path": "blocks/billing"
+    },
+    {
+      "path": "blocks/compliance"
+    },
+    {
+      "path": "blocks/csv-import"
+    },
+    {
+      "path": "blocks/db-health"
+    },
+    {
+      "path": "blocks/doc-extraction"
+    },
+    {
+      "path": "blocks/embedding-freshness"
+    },
+    {
+      "path": "blocks/feature-flags"
+    },
+    {
+      "path": "blocks/file-registry"
+    },
+    {
+      "path": "blocks/hybrid-search"
+    },
+    {
+      "path": "blocks/image-derivatives"
+    },
+    {
+      "path": "blocks/ingest-router"
+    },
+    {
+      "path": "blocks/moderation"
+    },
+    {
+      "path": "blocks/notifications"
+    },
+    {
+      "path": "blocks/pii-anonymizer"
+    },
+    {
+      "path": "blocks/queue"
+    },
+    {
+      "path": "blocks/rag"
+    },
+    {
+      "path": "blocks/realtime"
+    },
+    {
+      "path": "blocks/semantic-cache"
+    },
+    {
+      "path": "blocks/transcription"
+    },
+    {
+      "path": "blocks/vision"
+    },
+    {
+      "path": "blocks/webhooks-inbound"
+    },
+    {
+      "path": "blocks/webhooks-outbound"
+    }
+  ]
+}

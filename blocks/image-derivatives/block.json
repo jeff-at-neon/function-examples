@@ -1,0 +1,101 @@
+{
+  "slug": "image-derivatives",
+  "rank": 23,
+  "name": "Image Derivatives",
+  "summary": "Thumbnails and transforms with EXIF stripping, generated on read and cached, not eagerly on upload.",
+  "schema": "blocks_image_derivatives",
+  "billing": "meter",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "object_storage"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "IMAGES_SOURCE_BUCKET",
+      "description": "Bucket holding original images.",
+      "required": true,
+      "example": "uploads"
+    },
+    {
+      "name": "IMAGES_SOURCE_PREFIX",
+      "description": "Prefix under which originals live.",
+      "required": false,
+      "default": "uploads/"
+    },
+    {
+      "name": "IMAGES_DERIVATIVE_BUCKET",
+      "description": "Where derivatives are written. A separate bucket is the safest shape; empty reuses the source bucket, which then requires a disjoint prefix.",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "IMAGES_DERIVATIVE_PREFIX",
+      "description": "Prefix for derivatives. Must be provably disjoint from IMAGES_SOURCE_PREFIX when sharing a bucket, or every output retriggers the pipeline.",
+      "required": false,
+      "default": "derived/"
+    },
+    {
+      "name": "IMAGES_MAX_PIXELS",
+      "description": "Maximum source pixel count. The decompression-bomb guard: a 40KB PNG can decode to 30000x30000, which a byte limit does not catch.",
+      "required": false,
+      "default": "40000000"
+    },
+    {
+      "name": "IMAGES_MAX_BYTES",
+      "description": "Maximum source file size.",
+      "required": false,
+      "default": "26214400"
+    },
+    {
+      "name": "IMAGES_ALLOWED_WIDTHS",
+      "description": "Comma-separated permitted widths. An allowlist, not a range: unbounded widths let a caller generate unlimited distinct derivatives and bill you for each.",
+      "required": false,
+      "default": "64,128,256,512,1024,2048"
+    },
+    {
+      "name": "IMAGES_CACHE_CONTROL",
+      "description": "Cache-Control on served derivatives. Long, because content is immutable for a given key and etag.",
+      "required": false,
+      "default": "public, max-age=31536000, immutable"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "19 5 * * *",
+      "functionPath": "/reconcile",
+      "description": "Required by §5. Detects derivatives whose source is gone -- there are no storage delete events, so orphans are otherwise permanent and you keep paying to store them."
+    }
+  ]
+}

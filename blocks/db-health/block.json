@@ -1,0 +1,59 @@
+{
+  "slug": "db-health",
+  "rank": 25,
+  "name": "Database Health Pack",
+  "summary": "Slow-query digest, unused-index and bloat detection, long-transaction alerts, and trend comparison across snapshots.",
+  "schema": "blocks_db_health",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "branching"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "HEALTH_SLOW_QUERY_MS",
+      "description": "Mean execution time above which a statement is recorded.",
+      "required": false,
+      "default": "100"
+    },
+    {
+      "name": "HEALTH_BLOAT_WARN_PCT",
+      "description": "Dead-tuple percentage that triggers a finding.",
+      "required": false,
+      "default": "20"
+    },
+    {
+      "name": "HEALTH_MIN_TABLE_BYTES",
+      "description": "Ignore objects smaller than this. Percentages on tiny tables are noise, and reporting them buries the real findings.",
+      "required": false,
+      "default": "10485760"
+    },
+    {
+      "name": "HEALTH_SNAPSHOT_RETENTION_DAYS",
+      "description": "How long snapshots are kept for trend comparison.",
+      "required": false,
+      "default": "90"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "7 6 * * *",
+      "functionPath": "/snapshot",
+      "description": "Take a daily snapshot and record findings. One reading shows what is slow; a series shows what got slower."
+    }
+  ]
+}

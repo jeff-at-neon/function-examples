@@ -1,0 +1,46 @@
+{
+  "slug": "feature-flags",
+  "rank": 22,
+  "name": "Feature Flags and Experiments",
+  "summary": "Deterministic bucketing, exposure logging, and a significance readout — flags that double as A/B tests.",
+  "schema": "blocks_feature_flags",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "FLAGS_EXPOSURE_SAMPLE_RATE",
+      "description": "Fraction of exposures recorded, 0..1. Below 1 reduces write volume but widens confidence intervals proportionally.",
+      "required": false,
+      "default": "1"
+    },
+    {
+      "name": "FLAGS_DEFAULT_ON_ERROR",
+      "description": "Value returned when evaluation fails. Defaults to false: a flag failing open turns an outage into an unreviewed feature launch.",
+      "required": false,
+      "default": "false"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "47 2 * * *",
+      "functionPath": "/rollup",
+      "description": "Aggregate exposures and conversions into daily results, so the readout does not scan raw events."
+    }
+  ]
+}
