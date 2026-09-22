@@ -1,0 +1,56 @@
+{
+  "slug": "realtime",
+  "rank": 3,
+  "name": "Realtime Fan-out",
+  "summary": "LISTEN/NOTIFY to SSE and WebSocket, with presence and live counters. No Redis, no separate broker service.",
+  "schema": "blocks_realtime",
+  "billing": "free",
+  "depth": "implemented",
+  "capabilities": ["postgres", "data_api"],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "REALTIME_MAX_CONNECTION_SECONDS",
+      "description": "Hard lifetime for a stream before the client is asked to reconnect. Bounds a held connection's waiting Capacity-Hours and survives deploys.",
+      "required": false,
+      "default": "900"
+    },
+    {
+      "name": "REALTIME_HEARTBEAT_SECONDS",
+      "description": "Comment-frame interval that keeps proxies from closing an idle stream.",
+      "required": false,
+      "default": "25"
+    },
+    {
+      "name": "REALTIME_MAX_CHANNELS_PER_CONNECTION",
+      "description": "Ceiling on channels one client may subscribe to, so a single request cannot fan out unboundedly.",
+      "required": false,
+      "default": "16"
+    },
+    {
+      "name": "REALTIME_PRESENCE_TTL_SECONDS",
+      "description": "How long a presence record survives without a heartbeat. Must exceed the heartbeat interval.",
+      "required": false,
+      "default": "60"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating the cron sweeper's trigger delivery.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "*/5 * * * *",
+      "functionPath": "/sweep",
+      "description": "Expire stale presence records and prune the event buffer. Connections die without unsubscribing, so presence needs a TTL reaper."
+    }
+  ]
+}

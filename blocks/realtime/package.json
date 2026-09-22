@@ -1,0 +1,13 @@
+{
+  "name": "@neon-blocks/block-realtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neon Block: realtime fan-out over SSE and WebSocket.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0",
+    "pg": "^8.13.0"
+  }
+}
