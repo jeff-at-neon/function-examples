@@ -99,8 +99,8 @@ upload → file-registry  (Object Storage + SQL index)
 ```
 packages/     shared runtime — core, events, queue, storage, ai, migrate, cli
 blocks/       the 25 blocks, each self-contained
-docs/         conventions, platform facts, catalog ranking, row-event migration plan
-scripts/      scaffold generator for blocks 11–25, and the CI migration verifier
+docs/         conventions, verified platform facts, row-event migration plan
+scripts/      doctor (env preflight), scaffold generator, CI migration verifier
 ```
 
 Blocks 11–25 are **generated** from specs in `scripts/specs-*.mjs`. Edit the spec and re-run
@@ -118,14 +118,46 @@ node packages/cli/bin/neon-blocks.mjs verify       # enforce docs/CONVENTIONS.md
 node packages/cli/bin/neon-blocks.mjs list         # the catalog
 ```
 
-Unit tests are deliberately pure, so `npm test` works offline and fast. The database-backed
-verification lives in CI:
+Unit tests are deliberately pure, so `npm test` works offline and fast.
+
+## Testing against a real Neon database
+
+The SQL has never been executed, so this is the highest-value thing to run. Only `DATABASE_URL` is
+needed to exercise all 25 blocks' migrations.
 
 ```bash
-DATABASE_URL=postgres://... node scripts/ci-migrate.mjs apply
-DATABASE_URL=postgres://... node scripts/ci-migrate.mjs verify-rollback
-DATABASE_URL=postgres://... node scripts/ci-migrate.mjs check-views
+cp .env.example .env         # then fill in DATABASE_URL
+node scripts/doctor.mjs      # validates config and connectivity
 ```
+
+`doctor.mjs` is written so its **output is safe to paste anywhere** — every credential is reduced to
+a shape assertion (`set, 40 chars, prefix "sk_"`) and no value is ever printed, not even the
+database password or username. If you need help diagnosing a connection, paste the doctor output
+rather than your config.
+
+It also refuses two configurations that would cost you real money or data:
+
+- **a pooled connection string** — migrations use advisory locks and session state, which
+  transaction-mode pooling does not preserve. Use the direct string.
+- **a database or host whose name contains `prod`/`main`** — `verify-rollback` drops every block
+  schema by design. Use a throwaway branch:
+
+```bash
+neon branches create --name blocks-test
+neon connection-string blocks-test
+```
+
+Then run the verification:
+
+```bash
+node scripts/ci-migrate.mjs apply             # apply all 25 blocks in dependency order
+node scripts/ci-migrate.mjs verify-rollback   # prove every migration reverses
+node scripts/ci-migrate.mjs check-views       # query every v_status
+```
+
+Each additional credential unlocks more: **AI Gateway** enables RAG, hybrid search, vision, and
+embedding freshness; **Object Storage** enables the whole storage family; **`NEON_API_KEY`** enables
+function deployment and live trigger delivery. `doctor.mjs` reports which tier you've reached.
 
 `verify-rollback` is the one that matters: it applies every migration, rolls them all back, then
 **re-applies them**. A down migration can succeed and still leave residue that makes the up
