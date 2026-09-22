@@ -1,0 +1,105 @@
+{
+  "slug": "rag",
+  "rank": 2,
+  "name": "Document → RAG Ingestion",
+  "summary": "Drop a document in a bucket; it becomes semantically searchable. Extract, chunk, embed, upsert to pgvector.",
+  "schema": "blocks_rag",
+  "billing": "free",
+  "depth": "implemented",
+  "capabilities": ["postgres", "pgvector", "object_storage", "ai_gateway"],
+  "dependsOn": ["queue"],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "S3-compatible Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_AI_GATEWAY_API_KEY",
+      "description": "AI Gateway credential for embeddings. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "RAG_BUCKET",
+      "description": "Bucket to watch for documents to ingest.",
+      "required": true,
+      "example": "documents"
+    },
+    {
+      "name": "RAG_PREFIX",
+      "description": "Key prefix within the bucket to watch. Storage triggers have no suffix filter, so non-documents under this prefix are recorded as skipped rather than failing.",
+      "required": false,
+      "default": "uploads/"
+    },
+    {
+      "name": "RAG_EMBEDDING_MODEL",
+      "description": "Embedding model. Changing this after ingestion requires a migration, not a config change: the vector column is fixed-width.",
+      "required": false,
+      "default": "text-embedding-3-small"
+    },
+    {
+      "name": "RAG_EMBEDDING_DIMENSIONS",
+      "description": "Must match the model's output and the vector column width.",
+      "required": false,
+      "default": "1536"
+    },
+    {
+      "name": "RAG_CHUNK_CHARS",
+      "description": "Target chunk size in characters. ~1000 chars is ~250 tokens.",
+      "required": false,
+      "default": "1000"
+    },
+    {
+      "name": "RAG_CHUNK_OVERLAP",
+      "description": "Characters repeated across chunk boundaries so a fact spanning two chunks stays retrievable.",
+      "required": false,
+      "default": "150"
+    },
+    {
+      "name": "RAG_MAX_BYTES",
+      "description": "Largest document to process. A hard cap is mandatory: the endpoint is public and functions run at a fixed size.",
+      "required": false,
+      "default": "26214400"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret for authenticating trigger delivery. Strongly recommended: Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "storage_object_created",
+      "bucketEnv": "RAG_BUCKET",
+      "prefixEnv": "RAG_PREFIX",
+      "functionPath": "/ingest",
+      "description": "Ingest a newly uploaded document."
+    },
+    {
+      "type": "schedule",
+      "cron": "23 * * * *",
+      "functionPath": "/reconcile",
+      "description": "Required by convention §5: storage triggers are Beta with no delivery guarantee and no delete events. Finds missed uploads and marks deleted objects."
+    }
+  ]
+}

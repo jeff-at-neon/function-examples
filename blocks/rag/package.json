@@ -1,0 +1,15 @@
+{
+  "name": "@neon-blocks/block-rag",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neon Block: document → RAG ingestion pipeline.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@neon-blocks/ai": "0.1.0",
+    "@neon-blocks/core": "0.1.0",
+    "@neon-blocks/queue": "0.1.0",
+    "@neon-blocks/storage": "0.1.0"
+  }
+}

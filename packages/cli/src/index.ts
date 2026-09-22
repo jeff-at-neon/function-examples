@@ -161,19 +161,42 @@ async function verifyFiles(
       add("§10 observability", "src/index.ts does not register a /health route");
     }
 
-    // §7 — a storage-triggered handler must HEAD-verify, since trigger POSTs are forgeable.
+    // §7 — a storage-triggered block must HEAD-verify, since trigger POSTs are forgeable.
+    //
+    // Checked across the whole src/ tree, not just index.ts: a well-factored block keeps the
+    // pipeline in its own module, and flagging that would push people to inline everything into
+    // the handler to satisfy the linter.
     if (manifest.triggers.some((t) => t.type === "storage_object_created")) {
-      if (!handler.includes("headVerified")) {
+      const sources = await readSourceTree(path.join(dir, "src"));
+      if (!sources.some((source) => source.includes("headVerified"))) {
         add(
           "§7 untrusted input",
-          "storage-triggered handler never calls headVerified(); trigger delivery is " +
-            "unauthenticated, so object existence must be independently established",
+          "no source file calls headVerified(); trigger delivery is unauthenticated, so " +
+            "object existence must be independently established before acting on an event",
         );
       }
     }
   } catch {
     // Missing src/index.ts already reported above.
   }
+}
+
+/** Read every .ts file under a directory, recursively. */
+async function readSourceTree(dir: string): Promise<string[]> {
+  const contents: string[] = [];
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return contents;
+  }
+
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) contents.push(...(await readSourceTree(full)));
+    else if (entry.name.endsWith(".ts")) contents.push(await readFile(full, "utf8"));
+  }
+  return contents;
 }
 
 /** Render the install plan for a block: migrations, env vars, triggers, dependencies. */
