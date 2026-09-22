@@ -9,9 +9,11 @@ npx neon-blocks add queue
 npx neon-blocks add rag
 ```
 
-> **Status: scaffolding.** The repo structure, shared runtime, conventions, and all 25 block
-> skeletons are in place. Handler logic completeness varies by block — see
-> [Block status](#block-status). Nothing here has been run against a live Neon project yet.
+> **Status: unverified against a live Neon project.** All 25 blocks have real schemas, safety
+> checks, and migrations; blocks 1–10 have implemented logic with 240 unit tests. But nothing here
+> has been deployed to Neon, and the SQL has not been executed — CI is written to do exactly that
+> (apply every migration, roll it back, re-apply it, query every view) and has not yet run.
+> Treat the schemas as reviewed, not proven.
 
 ## Why
 
@@ -47,25 +49,25 @@ Ranked per [docs/CATALOG.md](docs/CATALOG.md). Depth reflects build order, not f
 
 | # | Block | Depth | Pulls in | $ |
 |---|---|---|---|---|
-| 1 | [queue](blocks/queue) | implemented | Functions, cron | free |
-| 2 | [rag](blocks/rag) | implemented | Storage, pgvector, AI Gateway | free |
-| 3 | [realtime](blocks/realtime) | implemented | Functions, Data API | free |
-| 4 | [file-registry](blocks/file-registry) | implemented | Object Storage, RLS | free |
-| 5 | [ingest-router](blocks/ingest-router) | implemented | Storage triggers | free |
+| 1 | [queue](blocks/queue) | implemented | — | free |
+| 2 | [rag](blocks/rag) | implemented | pgvector, Object Storage, AI Gateway | free |
+| 3 | [realtime](blocks/realtime) | implemented | Data API | free |
+| 4 | [file-registry](blocks/file-registry) | implemented | Object Storage | free |
+| 5 | [ingest-router](blocks/ingest-router) | implemented | Object Storage | free |
 | 6 | [webhooks-inbound](blocks/webhooks-inbound) | implemented | Custom domains | free |
-| 7 | [hybrid-search](blocks/hybrid-search) | implemented | pgvector, FTS | free |
-| 8 | [billing](blocks/billing) | implemented | Auth, queue | meter |
-| 9 | [vision](blocks/vision) | implemented | AI Gateway, Storage | meter |
-| 10 | [webhooks-outbound](blocks/webhooks-outbound) | implemented | queue | meter |
-| 11 | [csv-import](blocks/csv-import) | scaffold | Storage | free |
+| 7 | [hybrid-search](blocks/hybrid-search) | implemented | pgvector, AI Gateway | free |
+| 8 | [billing](blocks/billing) | implemented | Auth | meter |
+| 9 | [vision](blocks/vision) | implemented | Object Storage, AI Gateway | meter |
+| 10 | [webhooks-outbound](blocks/webhooks-outbound) | implemented | Custom domains | meter |
+| 11 | [csv-import](blocks/csv-import) | scaffold | Object Storage | free |
 | 12 | [api-edge](blocks/api-edge) | scaffold | Auth | free |
-| 13 | [notifications](blocks/notifications) | scaffold | queue | free |
-| 14 | [embedding-freshness](blocks/embedding-freshness) | scaffold | pgvector | free |
-| 15 | [pii-anonymizer](blocks/pii-anonymizer) | scaffold | Branching, Storage | meter |
-| 16 | [doc-extraction](blocks/doc-extraction) | scaffold | AI Gateway | meter |
+| 13 | [notifications](blocks/notifications) | scaffold | Auth | free |
+| 14 | [embedding-freshness](blocks/embedding-freshness) | scaffold | pgvector, AI Gateway | free |
+| 15 | [pii-anonymizer](blocks/pii-anonymizer) | scaffold | Object Storage, Branching | meter |
+| 16 | [doc-extraction](blocks/doc-extraction) | scaffold | Object Storage, AI Gateway | meter |
 | 17 | [compliance](blocks/compliance) | scaffold | — | meter |
-| 18 | [moderation](blocks/moderation) | scaffold | AI Gateway, Storage | meter |
-| 19 | [transcription](blocks/transcription) | scaffold | AI Gateway, Storage | meter |
+| 18 | [moderation](blocks/moderation) | scaffold | Object Storage, AI Gateway | meter |
+| 19 | [transcription](blocks/transcription) | scaffold | Object Storage, AI Gateway | meter |
 | 20 | [semantic-cache](blocks/semantic-cache) | scaffold | pgvector, AI Gateway | free |
 | 21 | [agent-memory](blocks/agent-memory) | scaffold | pgvector, AI Gateway | free |
 | 22 | [feature-flags](blocks/feature-flags) | scaffold | — | free |
@@ -94,22 +96,40 @@ upload → file-registry  (Object Storage + SQL index)
 ## Repo layout
 
 ```
-packages/     shared runtime — core, events, queue, storage, ai, migrate, testing, cli
+packages/     shared runtime — core, events, queue, storage, ai, migrate, cli
 blocks/       the 25 blocks, each self-contained
 docs/         conventions, platform facts, catalog ranking, row-event migration plan
+scripts/      scaffold generator for blocks 11–25, and the CI migration verifier
 ```
+
+Blocks 11–25 are **generated** from specs in `scripts/specs-*.mjs`. Edit the spec and re-run
+`node scripts/scaffold.mjs` — editing a generated file directly gets discarded on the next
+regeneration, and CI fails if the two have diverged. That's what keeps the conventions uniform
+across fifteen blocks instead of fifteen slightly different interpretations.
 
 ## Local development
 
 ```bash
 npm install
-npm run typecheck
-npm test              # pure logic; no database required
+npm run typecheck                                  # all 7 packages + 25 blocks, in dependency order
+npm test                                           # 240 unit tests, no database required
+node packages/cli/bin/neon-blocks.mjs verify       # enforce docs/CONVENTIONS.md
+node packages/cli/bin/neon-blocks.mjs list         # the catalog
 ```
 
-Database-backed tests are opt-in — set `NEON_BLOCKS_TEST_DATABASE_URL` to a throwaway Neon
-branch. CI creates one per run, which dogfoods branching and doubles as the test-harness
-template users copy.
+Unit tests are deliberately pure, so `npm test` works offline and fast. The database-backed
+verification lives in CI:
+
+```bash
+DATABASE_URL=postgres://... node scripts/ci-migrate.mjs apply
+DATABASE_URL=postgres://... node scripts/ci-migrate.mjs verify-rollback
+DATABASE_URL=postgres://... node scripts/ci-migrate.mjs check-views
+```
+
+`verify-rollback` is the one that matters: it applies every migration, rolls them all back, then
+**re-applies them**. A down migration can succeed and still leave residue that makes the up
+migration fail the second time, and only the round trip catches that. It's also how the
+"every migration is reversible" claim in the conventions becomes an assertion rather than a promise.
 
 ## License
 

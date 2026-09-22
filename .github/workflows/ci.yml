@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A PR superseded by a new push does not need its old run finishing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast feedback: types, conventions, and pure-logic tests. No database, so this runs in seconds and
+  # catches the majority of mistakes before anything slower starts.
+  static:
+    name: Typecheck, conventions, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 24 matches the Neon Functions runtime. Testing on anything else means testing a different
+          # platform than the one these blocks deploy to.
+          node-version: "24"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck all packages and blocks
+        run: npx tsc --build
+
+      - name: Enforce block conventions
+        # Mechanically checks docs/CONVENTIONS.md across all 25 blocks: one namespaced schema per
+        # block, every migration reversible, a v_status view, a /health route, HEAD-verify on
+        # storage-triggered blocks, and a cron reconciler wherever a storage trigger exists.
+        run: node packages/cli/bin/neon-blocks.mjs verify
+
+      - name: Unit tests
+        run: npx vitest run
+
+      - name: Confirm scaffolds are in sync with their specs
+        # Blocks 11-25 are generated. If someone edits a generated file by hand instead of its spec,
+        # the next regeneration silently discards the change -- so catch the divergence here.
+        run: |
+          node scripts/scaffold.mjs
+          if ! git diff --quiet; then
+            echo "::error::Generated blocks differ from their specs in scripts/specs-*.mjs."
+            echo "Edit the spec and re-run 'node scripts/scaffold.mjs', rather than editing generated files."
+            git diff --stat
+            exit 1
+          fi
+
+  # The verification that matters most, because it is the part unit tests cannot reach: every
+  # migration is applied to a real Postgres, then rolled back, then re-applied. Convention §2 says
+  # migrations must be reversible and these run in production databases -- asserting that in CI is
+  # the only way the claim is worth anything.
+  migrations:
+    name: Apply and roll back every migration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # pgvector image, because blocks 2, 7, 14, 20, and 21 require the vector extension. Plain
+        # postgres would fail at CREATE EXTENSION and we would learn nothing about the rest.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neon_blocks_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/neon_blocks_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the CLI and migrate package
+        run: npx tsc --build packages/cli
+
+      - name: Apply every migration in dependency order
+        # Ranked order, so a block that references a dependency's schema finds it already present.
+        run: node scripts/ci-migrate.mjs apply
+
+      - name: Assert every migration is reversible
+        # Rolls back in reverse rank order, then re-applies. Catches three real classes of bug: a
+        # down migration that does not exist, one that fails, and one that leaves the schema in a
+        # state the up migration cannot be applied to again.
+        run: node scripts/ci-migrate.mjs verify-rollback
+
+      - name: Assert every v_status view is queryable
+        # A view that parses but references a dropped column only fails when someone reads it, which
+        # in practice is during an incident.
+        run: node scripts/ci-migrate.mjs check-views
+
+  # Runs only when the repository has Neon credentials, so forks are not blocked by their absence.
+  # Dogfoods branching: the test harness is also the template users copy.
+  neon-branch:
+    name: Integration on a Neon branch
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && github.repository_owner != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Skip without credentials
+        id: gate
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          if [ -z "$NEON_API_KEY" ]; then
+            echo "NEON_API_KEY is not set; skipping. This job is optional and forks cannot run it."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A throwaway child branch per run. Free, disposable, and an exact copy of the parent's schema,
+      # which is what makes it a better test target than a fresh empty database.
+      - name: Create a test branch
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          echo "TODO: neon branches create --name ci-${{ github.run_id }}"
+          echo "Then export its connection string as DATABASE_URL and run the migration suite."
+          echo "Finally: neon branches delete ci-${{ github.run_id }} -- always, even on failure."
