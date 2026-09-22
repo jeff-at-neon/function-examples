@@ -1,0 +1,13 @@
+{
+  "name": "@neon-blocks/block-hybrid-search",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neon Block: hybrid BM25 + vector search with reciprocal rank fusion.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@neon-blocks/ai": "0.1.0",
+    "@neon-blocks/core": "0.1.0"
+  }
+}

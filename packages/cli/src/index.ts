@@ -102,16 +102,27 @@ export async function verifyBlocks(blocksDir: string): Promise<VerifyProblem[]> 
       );
     }
 
-    // §1 — never touch another block's schema or the user's tables.
+    // §1 — never touch another block's schema, except one it explicitly depends on.
+    //
+    // The exception is narrow but real: hybrid-search indexes and queries the corpus that rag
+    // ingested, and duplicating every chunk and embedding to avoid the reference would be far
+    // worse. Requiring the dependency to be declared in `dependsOn` keeps it visible and lets the
+    // CLI order installs correctly, rather than letting any block reach anywhere.
+    const permitted = new Set([
+      manifest.schema,
+      "blocks_core",
+      ...manifest.dependsOn.map((slug) => `blocks_${slug.replace(/-/g, "_")}`),
+    ]);
+
     for (const migration of migrations) {
       const foreign = [...migration.upSql.matchAll(/\bblocks_([a-z0-9_]+)\./g)]
         .map((m) => `blocks_${m[1]}`)
-        .filter((s) => s !== manifest.schema && s !== "blocks_core");
+        .filter((schema) => !permitted.has(schema));
       for (const schema of new Set(foreign)) {
         add(
           "§1 isolation",
-          `migration ${migration.version} references foreign schema "${schema}"; ` +
-            `cross-block access goes through the events/queue contracts`,
+          `migration ${migration.version} references foreign schema "${schema}" which is not in ` +
+            `dependsOn. Either declare the dependency or go through the events/queue contracts.`,
         );
       }
     }
