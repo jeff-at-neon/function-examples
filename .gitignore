@@ -12,3 +12,6 @@ coverage/
 # Internal strategy notes: monetization posture, platform asks, competitive reads.
 # Kept out of the public repo deliberately.
 .internal/
+
+# Release build output; produced by scripts/build-release.mjs
+dist-release/

@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  # Manual runs produce artifacts without publishing, so the build can be checked before tagging.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (no tag created)"
+        required: true
+        default: "0.0.0-dev"
+
+permissions:
+  contents: write # attaching artifacts to a release
+
+jobs:
+  release:
+    name: Build and publish catalog artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the Neon Functions runtime, so the bundle targets the platform it will run on.
+          node-version: "24"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Derive version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building version $VERSION"
+
+      # Gate the release on the same checks as CI. A tag that ships a block failing its own
+      # conventions is worse than a delayed release, because the console would then serve it.
+      - name: Typecheck
+        run: npx tsc --build
+
+      - name: Enforce conventions
+        run: node packages/cli/bin/neon-blocks.mjs verify
+
+      - name: Unit tests
+        run: npx vitest run
+
+      - name: Build artifacts
+        run: node scripts/build-release.mjs --version "${{ steps.version.outputs.value }}"
+
+      - name: Verify artifacts are self-contained and credential-free
+        # The two properties the whole model depends on: an artifact must deploy without the monorepo,
+        # and must be safe to serve unauthenticated. Checked here rather than trusted, because a
+        # regression in either is invisible until someone deploys.
+        run: node scripts/verify-release.mjs
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-${{ steps.version.outputs.value }}
+          path: dist-release/
+          retention-days: 90
+
+      # Tag pushes publish. The catalog.json and tarballs become the URLs the console fetches.
+      - name: Publish release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Neon Blocks ${{ steps.version.outputs.value }}" \
+            --notes "Catalog release. \`catalog.json\` is the console index; each block ships as a self-contained tarball containing bundled code, migrations, manifest, and README.
+
+          Artifacts contain no credentials and can be served unauthenticated." \
+            dist-release/*
