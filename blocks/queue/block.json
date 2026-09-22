@@ -1,0 +1,75 @@
+{
+  "slug": "queue",
+  "rank": 1,
+  "name": "Outbox + Durable Job Queue",
+  "summary": "Postgres-backed job queue and event outbox: retries, backoff, DLQ, idempotency, concurrency caps.",
+  "schema": "blocks_queue",
+  "billing": "free",
+  "depth": "implemented",
+  "capabilities": ["postgres"],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret appended to trigger paths as ?secret=. Neon does not sign trigger delivery, so this is the only way to authenticate rather than merely recognise an event.",
+      "required": false,
+      "example": "a-long-random-string"
+    },
+    {
+      "name": "QUEUE_BATCH_SIZE",
+      "description": "Jobs claimed per invocation. Raise for throughput, lower to bound per-invocation cost.",
+      "required": false,
+      "default": "25"
+    },
+    {
+      "name": "QUEUE_LEASE_SECONDS",
+      "description": "How long a claimed job may run before another worker may steal it. Must exceed your slowest handler.",
+      "required": false,
+      "default": "300"
+    },
+    {
+      "name": "QUEUE_BUDGET_MS",
+      "description": "Stop claiming new work after this long so the invocation ends cleanly. Billing runs until the handler returns.",
+      "required": false,
+      "default": "45000"
+    },
+    {
+      "name": "QUEUE_OUTBOX_BATCH_SIZE",
+      "description": "Outbox events drained per invocation.",
+      "required": false,
+      "default": "100"
+    },
+    {
+      "name": "QUEUE_RETENTION_DAYS",
+      "description": "How long succeeded jobs and delivered events are kept before the sweeper purges them.",
+      "required": false,
+      "default": "7"
+    },
+    {
+      "name": "QUEUE_CONCURRENCY",
+      "description": "Per-type concurrency caps as JSON, e.g. {\"rag.embed\":4}. Guards against a firehose consuming all capacity.",
+      "required": false,
+      "default": "{}"
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "* * * * *",
+      "functionPath": "/work",
+      "description": "Drain the outbox and run due jobs. Every minute is the practical floor for cron-driven reactivity."
+    },
+    {
+      "type": "schedule",
+      "cron": "17 3 * * *",
+      "functionPath": "/sweep",
+      "description": "Reclaim expired leases, purge old succeeded jobs, report DLQ depth. Off-peak and off the hour."
+    }
+  ]
+}
