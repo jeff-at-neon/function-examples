@@ -1,0 +1,93 @@
+{
+  "slug": "ingest-router",
+  "rank": 5,
+  "name": "Ingest Router",
+  "summary": "One storage trigger per bucket, dispatched by file type. Centralizes etag idempotency, HEAD-verify, and loop safety.",
+  "schema": "blocks_ingest_router",
+  "billing": "free",
+  "depth": "implemented",
+  "capabilities": ["postgres", "object_storage"],
+  "dependsOn": ["queue"],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "S3-compatible Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "ROUTER_BUCKET",
+      "description": "Bucket this router watches. Storage triggers watch exactly one bucket each.",
+      "required": true,
+      "example": "uploads"
+    },
+    {
+      "name": "ROUTER_PREFIX",
+      "description": "Watched key prefix. Must be disjoint from any output prefix, since there is no negative prefix filter.",
+      "required": false,
+      "default": "uploads/"
+    },
+    {
+      "name": "ROUTER_OUTPUT_BUCKET",
+      "description": "Where downstream blocks write derivatives. Defaults to a separate bucket, because writing into the watched bucket retriggers the router forever.",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "ROUTER_OUTPUT_PREFIX",
+      "description": "Prefix for derivatives when sharing the input bucket. Startup fails unless it is provably disjoint from ROUTER_PREFIX.",
+      "required": false,
+      "default": "derived/"
+    },
+    {
+      "name": "ROUTER_ROUTES",
+      "description": "JSON mapping file kind to job types, e.g. {\"image\":[\"vision.tag\"],\"pdf\":[\"rag.ingest\"]}. Kinds with no route are recorded as unrouted rather than dropped.",
+      "required": false,
+      "default": "{}"
+    },
+    {
+      "name": "ROUTER_MAX_BYTES",
+      "description": "Objects larger than this are recorded and skipped rather than dispatched.",
+      "required": false,
+      "default": "524288000"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Strongly recommended.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "storage_object_created",
+      "bucketEnv": "ROUTER_BUCKET",
+      "prefixEnv": "ROUTER_PREFIX",
+      "functionPath": "/route",
+      "description": "The single trigger for the bucket. Dispatches in-function by detected file kind."
+    },
+    {
+      "type": "schedule",
+      "cron": "37 * * * *",
+      "functionPath": "/reconcile",
+      "description": "Required by §5. Re-dispatches objects the trigger never delivered."
+    }
+  ]
+}
