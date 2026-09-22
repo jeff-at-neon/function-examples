@@ -1,6 +1,6 @@
 -- Block 20: semantic cache for llm calls.
 --
--- Cuts your users' AI spend, which is slightly awkward: it reduces Neon's AI Gateway revenue while increasing loyalty. Worth it. An exact-match cache misses almost everything, because nobody asks the same question the same way twice -- similarity matching is what makes a cache hit at all.
+-- Cuts AI spend on repeated questions. An exact-match cache misses almost everything, because nobody asks the same question the same way twice -- similarity matching is what makes a cache hit at all.
 
 CREATE SCHEMA IF NOT EXISTS blocks_semantic_cache;
 

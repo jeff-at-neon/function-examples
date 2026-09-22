@@ -40,12 +40,13 @@ A block is that week, already done, in your own database.
 - **Provider adapters** — AI Gateway by default, adapters as the escape hatch.
 - **Observability by default** — every block ships `v_status` and `GET /health`.
 
-Full rules: [docs/CONVENTIONS.md](docs/CONVENTIONS.md). Platform facts and cost model they
-derive from: [docs/PLATFORM.md](docs/PLATFORM.md).
+Full rules: [docs/CONVENTIONS.md](docs/CONVENTIONS.md). The platform facts and cost model those
+rules derive from: [docs/RUNTIME.md](docs/RUNTIME.md).
 
 ## Block status
 
-Ranked per [docs/CATALOG.md](docs/CATALOG.md). Depth reflects build order, not final intent.
+Numbered in build order — foundations first, then the blocks that depend on them. Depth reflects
+how far each has been taken, not final intent.
 
 | # | Block | Depth | Pulls in | $ |
 |---|---|---|---|---|

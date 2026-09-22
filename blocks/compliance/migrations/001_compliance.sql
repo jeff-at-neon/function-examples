@@ -1,6 +1,6 @@
 -- Block 17: compliance pack.
 --
--- SOC 2 catnip, and the audit log is the part that is hard to retrofit. An audit trail added after the fact covers only what the application remembers to log; a trigger-based one captures writes from any client including psql, which is what auditors actually ask about. Row-event triggers would promote this from rank 17 to about 11 -- see docs/ROW_EVENTS.md.
+-- The audit log is the part that is hard to retrofit, which is the reason to have it early. An audit trail added after the fact covers only what the application remembers to log; a trigger-based one captures writes from any client including psql, which is what auditors actually ask about. Row-event triggers would make this considerably better -- see docs/ROW_EVENTS.md.
 
 CREATE SCHEMA IF NOT EXISTS blocks_compliance;
 

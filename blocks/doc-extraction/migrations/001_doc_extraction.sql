@@ -1,6 +1,6 @@
 -- Block 16: structured document extraction.
 --
--- High willingness to pay, because the alternative is someone typing invoice totals into a form. The part that makes it usable in production is not the extraction -- it is the confidence scoring and the review queue. An extraction system with no review step either needs a human to check everything, which defeats the purpose, or silently books wrong numbers.
+-- The alternative is someone typing invoice totals into a form, so the bar is low -- but the part that makes it usable in production is not the extraction, it is the confidence scoring and the review queue. An extraction system with no review step either needs a human to check everything, which defeats the purpose, or silently books wrong numbers.
 
 CREATE SCHEMA IF NOT EXISTS blocks_doc_extraction;
 

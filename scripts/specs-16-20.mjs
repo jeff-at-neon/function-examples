@@ -12,10 +12,10 @@ export const SPECS = [
     capabilities: ["postgres", "object_storage", "ai_gateway"],
     dependsOn: ["queue"],
     why:
-      "High willingness to pay, because the alternative is someone typing invoice totals into a form. " +
-      "The part that makes it usable in production is not the extraction -- it is the confidence " +
-      "scoring and the review queue. An extraction system with no review step either needs a human to " +
-      "check everything, which defeats the purpose, or silently books wrong numbers.",
+      "The alternative is someone typing invoice totals into a form, so the bar is low -- but the part " +
+      "that makes it usable in production is not the extraction, it is the confidence scoring and the " +
+      "review queue. An extraction system with no review step either needs a human to check " +
+      "everything, which defeats the purpose, or silently books wrong numbers.",
     notes: [
       "**Confidence is per field, not per document.** An invoice where the total is certain and the tax line is a guess needs the tax line reviewed and nothing else. A single document-level score forces all-or-nothing review.",
       "**Below-threshold fields queue for review; above-threshold ones apply.** That split is what makes the block save labour rather than relocate it.",
@@ -346,10 +346,11 @@ router.post("/review/:id", async (request, ctx) => {
     capabilities: ["postgres"],
     dependsOn: [],
     why:
-      "SOC 2 catnip, and the audit log is the part that is hard to retrofit. An audit trail added " +
-      "after the fact covers only what the application remembers to log; a trigger-based one captures " +
-      "writes from any client including psql, which is what auditors actually ask about. Row-event " +
-      "triggers would promote this from rank 17 to about 11 -- see docs/ROW_EVENTS.md.",
+      "The audit log is the part that is hard to retrofit, which is the reason to have it early. An " +
+      "audit trail added after the fact covers only what the application remembers to log; a " +
+      "trigger-based one captures writes from any client including psql, which is what auditors " +
+      "actually ask about. Row-event triggers would make this considerably better -- see " +
+      "docs/ROW_EVENTS.md.",
     notes: [
       "**Audit entries are optionally hash-chained.** Each row includes a hash of the previous row, so deleting or editing history breaks the chain detectably. Without it an audit log is only as trustworthy as the person with table access — which is precisely who you are auditing.",
       "**Capture is via a Postgres trigger, not application code.** It records writes from any client, including a human at a psql prompt. Application-level logging misses exactly the events an auditor cares about.",
@@ -1413,8 +1414,7 @@ router.get("/transcripts/:id", async (_request, ctx) => {
     capabilities: ["postgres", "pgvector", "ai_gateway"],
     dependsOn: [],
     why:
-      "Cuts your users' AI spend, which is slightly awkward: it reduces Neon's AI Gateway revenue " +
-      "while increasing loyalty. Worth it. An exact-match cache misses almost everything, because " +
+      "Cuts AI spend on repeated questions. An exact-match cache misses almost everything, because " +
       "nobody asks the same question the same way twice -- similarity matching is what makes a cache " +
       "hit at all.",
     notes: [

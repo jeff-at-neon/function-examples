@@ -39,7 +39,7 @@ startup with a single actionable message listing every missing variable — not 
 
 ## 4. One event contract: the outbox
 
-Neon has **no row-event triggers today** (see [PLATFORM.md](./PLATFORM.md)), but has
+Neon has **no row-event triggers today** (see [RUNTIME.md](./RUNTIME.md)), but has
 pre-announced them. So blocks never subscribe to database changes directly. They consume
 a logical event stream from `@neon-blocks/events`, backed today by an outbox table drained
 by cron, and tomorrow by native row triggers — without any block's interface changing.

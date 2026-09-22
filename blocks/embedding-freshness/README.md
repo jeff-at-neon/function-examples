@@ -2,7 +2,7 @@
 
 Re-embeds rows whose source text changed, driven by a watermark or the outbox. Fixes pgvector's most common failure mode.
 
-**Rank #14 of 25.** Free.
+**Block 14 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific

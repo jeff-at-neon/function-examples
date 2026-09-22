@@ -43,7 +43,7 @@ export interface EnvVarSpec {
 
 export interface BlockManifest {
   slug: string;
-  /** Rank in docs/CATALOG.md. Also the build order. */
+  /** Position in the catalog, which is also the build and install order. */
   rank: number;
   name: string;
   summary: string;
@@ -118,7 +118,7 @@ export function parseManifest(raw: unknown, source: string): BlockManifest {
 
   const rank = m["rank"];
   if (typeof rank !== "number" || !Number.isInteger(rank) || rank < 1) {
-    problems.push("rank must be a positive integer matching docs/CATALOG.md");
+    problems.push("rank must be a positive integer, unique across the catalog");
   }
 
   const billing = m["billing"];

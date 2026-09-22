@@ -3,7 +3,7 @@
  *
  * Invoices, receipts, and forms become typed rows with per-field confidence and a human-review queue.
  *
- * High willingness to pay, because the alternative is someone typing invoice totals into a form. The part that makes it usable in production is not the extraction -- it is the confidence scoring and the review queue. An extraction system with no review step either needs a human to check everything, which defeats the purpose, or silently books wrong numbers.
+ * The alternative is someone typing invoice totals into a form, so the bar is low -- but the part that makes it usable in production is not the extraction, it is the confidence scoring and the review queue. An extraction system with no review step either needs a human to check everything, which defeats the purpose, or silently books wrong numbers.
  *
  * Routes:
  *   POST   /schemas               Declare what to extract for a document type.

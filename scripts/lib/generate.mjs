@@ -285,7 +285,7 @@ DROP SCHEMA IF EXISTS ${schema} CASCADE;
 
 ${spec.summary}
 
-**Rank #${spec.rank} of 25.** ${spec.billing === "meter" ? "Metered." : "Free."}
+**Block ${spec.rank} of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > \`TODO\` seams are the remaining work, and unimplemented endpoints return \`501\` with a specific

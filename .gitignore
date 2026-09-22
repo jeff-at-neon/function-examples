@@ -8,3 +8,7 @@ dist/
 coverage/
 .neon/
 *.log
+
+# Internal strategy notes: monetization posture, platform asks, competitive reads.
+# Kept out of the public repo deliberately.
+.internal/

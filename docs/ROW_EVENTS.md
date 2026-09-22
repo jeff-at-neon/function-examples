@@ -42,34 +42,31 @@ That function is what gets **retired** when native triggers land. Consumers do n
 
 ## What changes when row events ship
 
-Ranked by impact, from the analysis that produced the catalog ordering:
+**The foundations barely move.** The queue does not become redundant — row events *feed* a
+queue, they don't replace one; you still need retries, backoff, DLQ, idempotency,
+concurrency caps, and ordering. What changes is the drain's internals (drain-on-event instead
+of poll-on-cron, so latency goes ~60s → ~1s) and it gains a new job: absorbing a firehose.
+RAG is already storage-triggered. Realtime *strengthens* — fan-out becomes automatic rather
+than requiring the app to remember to `NOTIFY`.
 
-**The top 3 barely move.** The queue stays #1 — row events *feed* a queue, they don't
-replace one; you still need retries, backoff, DLQ, idempotency, concurrency caps, and
-ordering. What changes is the drain's internals (drain-on-event instead of poll-on-cron, so
-latency goes ~60s → ~1s) and it gains a new job: absorbing a firehose. RAG is already
-storage-triggered. Realtime *strengthens* — fan-out becomes automatic rather than requiring
-the app to remember to `NOTIFY`.
+**Blocks that get materially better:**
 
-**Biggest promotions:**
+| Block | Why |
+|---|---|
+| `embedding-freshness` | The one block row events genuinely rescue. Watermark polling becomes true change-driven re-embedding, and stale vectors are pgvector's most common failure mode. |
+| `compliance` | Captures writes from *any* client including `psql`, with no app cooperation. That's what auditors actually ask about. |
+| `notifications` | "Email when order status changes" stops needing app-side wiring. |
+| `webhooks-outbound` | Genuinely declarative: "when `orders` changes, deliver to subscribers." |
+| `analytics` | Streaming aggregation instead of batch windows. |
 
-| Block | Now | Would be | Why |
-|---|---|---|---|
-| Embedding freshness | 14 | ~6 | The one block row events genuinely rescue. Watermark polling becomes true change-driven re-embedding. Stale vectors are pgvector's #1 failure mode. |
-| Compliance / audit log | 17 | ~11 | Captures writes from *any* client including `psql`, with no app cooperation. That's what auditors actually ask about. |
-| Notification engine | 13 | ~9 | "Email when order status changes" stops needing app-side wiring. |
-| Outbound webhooks | 10 | ~8 | Genuinely declarative: "when `orders` changes, deliver to subscribers." |
-| Analytics | 24 | ~18 | Streaming aggregation instead of batch windows. |
+**New blocks that only then become possible:** denormalization/materialized-view maintainer;
+cache invalidator; data-quality sentinel; CDC to a warehouse or search index; a workflow
+state-machine engine (Postgres as a durable orchestrator, on the strength of your state
+already living in the database); auth event handlers for signup, trial provisioning, and org
+seeding.
 
-**New blocks that only then become possible:** denormalization/materialized-view
-maintainer; cache invalidator; data-quality sentinel; CDC to warehouse/search; workflow
-state-machine engine (the big one — Postgres as durable orchestrator, competing with
-Inngest/Temporal on "your state is already in the DB"); auth event handlers (welcome email,
-trial provisioning, org seeding — the honest replacement for the Clerk-sync block that was
-deliberately cut).
-
-Net: ~6 existing blocks get better, 5 get promoted, 6 become possible — concentrated in the
-8–20 band, not the top. Which is why the build order below is correct either way.
+Net effect is concentrated in the middle of the catalog rather than the foundations, which is
+why the build order holds either way.
 
 ## The firehose caution
 

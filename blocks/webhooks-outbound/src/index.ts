@@ -2,9 +2,9 @@
  * Block 10 — Outbound Webhook Delivery.
  *
  * Your users' customers register endpoints; this signs and delivers events to them with retries,
- * per-endpoint circuit breaking, and a delivery log they can inspect. This is Svix's entire business
- * and the highest per-event pricing power in the catalog, because volume grows with your customer's
- * own success.
+ * per-endpoint circuit breaking, and a delivery log they can inspect. Dedicated providers exist and
+ * are good at this; the reason to run it here is that the delivery log lives in the same database as
+ * the events it describes, so a failed delivery can be joined back to what caused it.
  *
  * Routes:
  *   POST   /endpoints       register an endpoint

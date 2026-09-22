@@ -2,7 +2,7 @@
 
 Transactional email, SMS, and push behind provider adapters, with templates, per-user preferences, quiet hours, and digests.
 
-**Rank #13 of 25.** Free.
+**Block 13 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific

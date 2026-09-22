@@ -3,8 +3,9 @@
 Your users' customers register endpoints; this signs and delivers events to them with retries,
 per-endpoint circuit breaking, and a delivery log they can inspect.
 
-**Rank #10 of 25. Highest per-event pricing power in the catalog** — this is Svix's entire business,
-and the volume grows with your customer's own success.
+**Block 10 of 25**, numbered in build order. Outbound webhook delivery is a well-understood problem
+with mature dedicated providers, which is worth knowing before building it yourself — the value here
+is that the delivery log lives in the same database as the events it describes.
 
 ## Install
 

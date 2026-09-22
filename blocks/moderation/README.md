@@ -2,7 +2,7 @@
 
 Classifies uploads and text for abuse, and quarantines by default so unreviewed content is never served.
 
-**Rank #18 of 25.** Metered.
+**Block 18 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific

@@ -2,7 +2,7 @@
 
 Thumbnails and transforms with EXIF stripping, generated on read and cached, not eagerly on upload.
 
-**Rank #23 of 25.** Metered.
+**Block 23 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
@@ -10,15 +10,15 @@ Thumbnails and transforms with EXIF stripping, generated on read and cached, not
 
 ## Why this block
 
-Table stakes, not a differentiator: Cloudflare Images and Vercel do this well, and being next
-to Postgres buys nothing for pixel pushing. It is here so nobody asks why the catalog cannot do
-the obvious thing. Its real value is the registry join -- "every image this tenant owns and
-whether its thumbnail exists" -- rather than the resizing itself.
+Image resizing is well served by dedicated image CDNs, and running it next to Postgres buys
+nothing for the pixel work itself. What it does buy is the registry join -- "every image this
+tenant owns, and whether its thumbnail exists yet" -- which is not a question object storage
+can answer on its own.
 
-Ranked at 23 for packaging, not cost. The economics are fine: active Capacity-Hours are 4x
-waiting, not 40x, which works out around $16-26 per million images -- roughly 1.3-2x Lambda and
-some 30x cheaper than Cloudinary. The blocker is that the default esbuild bundle cannot load
-native .node binaries, so sharp breaks the one-command install.
+Built late because of packaging, not cost. The compute is affordable: active Capacity-Hours are
+4x waiting rather than 40x, which works out around $16-26 per million images. The real obstacle
+is that the default esbuild bundle cannot load native .node binaries, so sharp breaks the
+one-command install.
 
 ## Install
 

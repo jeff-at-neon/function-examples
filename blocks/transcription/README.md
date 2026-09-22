@@ -2,7 +2,7 @@
 
 Whisper-class transcription with timestamps, feeding the same search index as documents.
 
-**Rank #19 of 25.** Metered.
+**Block 19 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific

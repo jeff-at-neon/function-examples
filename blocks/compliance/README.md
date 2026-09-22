@@ -2,7 +2,7 @@
 
 Hash-chained audit log, soft delete with TTL purge, and GDPR export and hard-delete.
 
-**Rank #17 of 25.** Metered.
+**Block 17 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
@@ -10,7 +10,7 @@ Hash-chained audit log, soft delete with TTL purge, and GDPR export and hard-del
 
 ## Why this block
 
-SOC 2 catnip, and the audit log is the part that is hard to retrofit. An audit trail added after the fact covers only what the application remembers to log; a trigger-based one captures writes from any client including psql, which is what auditors actually ask about. Row-event triggers would promote this from rank 17 to about 11 -- see docs/ROW_EVENTS.md.
+The audit log is the part that is hard to retrofit, which is the reason to have it early. An audit trail added after the fact covers only what the application remembers to log; a trigger-based one captures writes from any client including psql, which is what auditors actually ask about. Row-event triggers would make this considerably better -- see docs/ROW_EVENTS.md.
 
 ## Install
 

@@ -12,15 +12,15 @@ export const SPECS = [
     capabilities: ["postgres", "object_storage"],
     dependsOn: [],
     why:
-      "Table stakes, not a differentiator: Cloudflare Images and Vercel do this well, and being next\n" +
-      "to Postgres buys nothing for pixel pushing. It is here so nobody asks why the catalog cannot do\n" +
-      "the obvious thing. Its real value is the registry join -- \"every image this tenant owns and\n" +
-      "whether its thumbnail exists\" -- rather than the resizing itself.\n" +
+      "Image resizing is well served by dedicated image CDNs, and running it next to Postgres buys\n" +
+      "nothing for the pixel work itself. What it does buy is the registry join -- \"every image this\n" +
+      "tenant owns, and whether its thumbnail exists yet\" -- which is not a question object storage\n" +
+      "can answer on its own.\n" +
       "\n" +
-      "Ranked at 23 for packaging, not cost. The economics are fine: active Capacity-Hours are 4x\n" +
-      "waiting, not 40x, which works out around $16-26 per million images -- roughly 1.3-2x Lambda and\n" +
-      "some 30x cheaper than Cloudinary. The blocker is that the default esbuild bundle cannot load\n" +
-      "native .node binaries, so sharp breaks the one-command install.",
+      "Built late because of packaging, not cost. The compute is affordable: active Capacity-Hours are\n" +
+      "4x waiting rather than 40x, which works out around $16-26 per million images. The real obstacle\n" +
+      "is that the default esbuild bundle cannot load native .node binaries, so sharp breaks the\n" +
+      "one-command install.",
     notes: [
       "**Transform-on-read, not eager generation.** Eager generation means guessing sizes up front, regenerating everything when the design changes, and paying to store derivatives nobody requests. On-demand with a cache check inverts all three.",
       "**WASM libvips by default, native `sharp` as an opt-in.** WASM is 2–4× slower but bundles cleanly with the default esbuild path, which keeps `neon-blocks add` a single command. Native needs `bundler: \"none\"` plus a platform-matched `node_modules`, and unbundled deploys cannot ship TypeScript.",

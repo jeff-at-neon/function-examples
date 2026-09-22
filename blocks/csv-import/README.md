@@ -2,7 +2,7 @@
 
 Spreadsheet lands in a bucket, validates into a staging table, merges typed, and writes a row-level error report back.
 
-**Rank #11 of 25.** Free.
+**Block 11 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific

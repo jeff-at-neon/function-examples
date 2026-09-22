@@ -3,7 +3,7 @@
  *
  * Caches model responses by embedding similarity, so a rephrased question reuses an existing answer.
  *
- * Cuts your users' AI spend, which is slightly awkward: it reduces Neon's AI Gateway revenue while increasing loyalty. Worth it. An exact-match cache misses almost everything, because nobody asks the same question the same way twice -- similarity matching is what makes a cache hit at all.
+ * Cuts AI spend on repeated questions. An exact-match cache misses almost everything, because nobody asks the same question the same way twice -- similarity matching is what makes a cache hit at all.
  *
  * Routes:
  *   POST   /lookup                Find a cached response for a prompt.

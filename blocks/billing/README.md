@@ -3,8 +3,7 @@
 Normalized subscriptions, **local** entitlement checks, idempotent usage metering, and dunning
 escalation. Provider-agnostic: Stripe, Polar, Paddle, or anything that emits subscription events.
 
-**Rank #8 of 25. First metered block** — this is the clearest addon-revenue story to your users,
-because it grows with *their* revenue.
+**Block 8 of 25**, numbered in build order.
 
 ## Why local entitlements
 

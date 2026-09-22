@@ -2,7 +2,7 @@
 
 Caches model responses by embedding similarity, so a rephrased question reuses an existing answer.
 
-**Rank #20 of 25.** Free.
+**Block 20 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
@@ -10,7 +10,7 @@ Caches model responses by embedding similarity, so a rephrased question reuses a
 
 ## Why this block
 
-Cuts your users' AI spend, which is slightly awkward: it reduces Neon's AI Gateway revenue while increasing loyalty. Worth it. An exact-match cache misses almost everything, because nobody asks the same question the same way twice -- similarity matching is what makes a cache hit at all.
+Cuts AI spend on repeated questions. An exact-match cache misses almost everything, because nobody asks the same question the same way twice -- similarity matching is what makes a cache hit at all.
 
 ## Install
 

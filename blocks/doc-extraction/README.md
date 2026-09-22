@@ -2,7 +2,7 @@
 
 Invoices, receipts, and forms become typed rows with per-field confidence and a human-review queue.
 
-**Rank #16 of 25.** Metered.
+**Block 16 of 25**, numbered in build order.
 
 > **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
 > `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
@@ -10,7 +10,7 @@ Invoices, receipts, and forms become typed rows with per-field confidence and a 
 
 ## Why this block
 
-High willingness to pay, because the alternative is someone typing invoice totals into a form. The part that makes it usable in production is not the extraction -- it is the confidence scoring and the review queue. An extraction system with no review step either needs a human to check everything, which defeats the purpose, or silently books wrong numbers.
+The alternative is someone typing invoice totals into a form, so the bar is low -- but the part that makes it usable in production is not the extraction, it is the confidence scoring and the review queue. An extraction system with no review step either needs a human to check everything, which defeats the purpose, or silently books wrong numbers.
 
 ## Install
 
