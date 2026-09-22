@@ -1,0 +1,59 @@
+{
+  "slug": "api-edge",
+  "rank": 12,
+  "name": "API Edge Pack",
+  "summary": "Hashed scoped API keys, per-tenant rate limits and quotas, and idempotency-key middleware.",
+  "schema": "blocks_api_edge",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "neon_auth"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "API_KEY_PREFIX",
+      "description": "Human-readable key prefix, e.g. nb_live. Makes leaked keys identifiable in logs and greppable in code.",
+      "required": false,
+      "default": "nb_live"
+    },
+    {
+      "name": "API_RATE_WINDOW_SECONDS",
+      "description": "Fixed window length. Shorter windows reduce burst but increase write volume.",
+      "required": false,
+      "default": "60"
+    },
+    {
+      "name": "API_DEFAULT_RATE_LIMIT",
+      "description": "Requests per window when a key has no explicit limit.",
+      "required": false,
+      "default": "1000"
+    },
+    {
+      "name": "API_IDEMPOTENCY_TTL_HOURS",
+      "description": "How long a stored idempotent response is replayed before the key is reusable.",
+      "required": false,
+      "default": "24"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "11 * * * *",
+      "functionPath": "/sweep",
+      "description": "Prune expired rate windows and idempotency records. Without it both tables grow without bound."
+    }
+  ]
+}

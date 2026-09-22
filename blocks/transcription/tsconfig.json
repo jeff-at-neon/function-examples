@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/storage"
+    },
+    {
+      "path": "../../packages/ai"
+    },
+    {
+      "path": "../../packages/queue"
+    },
+    {
+      "path": "../../packages/events"
+    }
+  ]
+}

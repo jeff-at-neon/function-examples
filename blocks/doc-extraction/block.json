@@ -1,0 +1,99 @@
+{
+  "slug": "doc-extraction",
+  "rank": 16,
+  "name": "Structured Document Extraction",
+  "summary": "Invoices, receipts, and forms become typed rows with per-field confidence and a human-review queue.",
+  "schema": "blocks_doc_extraction",
+  "billing": "meter",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "object_storage",
+    "ai_gateway"
+  ],
+  "dependsOn": [
+    "queue"
+  ],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_AI_GATEWAY_API_KEY",
+      "description": "AI Gateway credential. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "EXTRACT_BUCKET",
+      "description": "Bucket to watch for documents.",
+      "required": true,
+      "example": "documents"
+    },
+    {
+      "name": "EXTRACT_PREFIX",
+      "description": "Watched key prefix.",
+      "required": false,
+      "default": "documents/"
+    },
+    {
+      "name": "EXTRACT_MODEL",
+      "description": "Vision-capable model. Must accept image input.",
+      "required": false,
+      "default": "gpt-4o-mini"
+    },
+    {
+      "name": "EXTRACT_CONFIDENCE_THRESHOLD",
+      "description": "Fields below this confidence queue for human review. Measure against your own corpus before trusting a value; model confidence is uncalibrated.",
+      "required": false,
+      "default": "0.8"
+    },
+    {
+      "name": "EXTRACT_MAX_BYTES",
+      "description": "Largest document to process.",
+      "required": false,
+      "default": "20971520"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "storage_object_created",
+      "bucketEnv": "EXTRACT_BUCKET",
+      "prefixEnv": "EXTRACT_PREFIX",
+      "functionPath": "/extract",
+      "description": "Extract structured fields from an uploaded document."
+    },
+    {
+      "type": "schedule",
+      "cron": "43 * * * *",
+      "functionPath": "/reconcile",
+      "description": "Required by §5. Retries failures and picks up documents the trigger never delivered."
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "slug": "moderation",
+  "rank": 18,
+  "name": "Moderation and Quarantine",
+  "summary": "Classifies uploads and text for abuse, and quarantines by default so unreviewed content is never served.",
+  "schema": "blocks_moderation",
+  "billing": "meter",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "object_storage",
+    "ai_gateway"
+  ],
+  "dependsOn": [
+    "queue"
+  ],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_AI_GATEWAY_API_KEY",
+      "description": "AI Gateway credential. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "MODERATION_BUCKET",
+      "description": "Bucket to watch for uploads.",
+      "required": true,
+      "example": "uploads"
+    },
+    {
+      "name": "MODERATION_PREFIX",
+      "description": "Watched key prefix.",
+      "required": false,
+      "default": "uploads/"
+    },
+    {
+      "name": "MODERATION_QUARANTINE_PREFIX",
+      "description": "Prefix quarantined objects move to. Must be disjoint from the watched prefix, or moving an object retriggers moderation of itself.",
+      "required": false,
+      "default": "quarantine/"
+    },
+    {
+      "name": "MODERATION_MODEL",
+      "description": "Vision-capable model for image classification.",
+      "required": false,
+      "default": "gpt-4o-mini"
+    },
+    {
+      "name": "MODERATION_THRESHOLDS",
+      "description": "Per-category block thresholds as JSON, e.g. {\"adult\":0.5,\"violence\":0.7}. Strict by default: permissive defaults create a false belief that content was checked.",
+      "required": false,
+      "default": "{\"adult\":0.5,\"violence\":0.6,\"self_harm\":0.4,\"hate\":0.4,\"harassment\":0.6}"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "storage_object_created",
+      "bucketEnv": "MODERATION_BUCKET",
+      "prefixEnv": "MODERATION_PREFIX",
+      "functionPath": "/scan",
+      "description": "Classify a newly uploaded object."
+    },
+    {
+      "type": "schedule",
+      "cron": "31 * * * *",
+      "functionPath": "/reconcile",
+      "description": "Required by §5, and load-bearing here: an object the trigger missed stays quarantined, so a missed delivery is a stuck upload rather than unmoderated content."
+    }
+  ]
+}

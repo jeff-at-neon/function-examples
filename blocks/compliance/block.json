@@ -1,0 +1,52 @@
+{
+  "slug": "compliance",
+  "rank": 17,
+  "name": "Compliance Pack",
+  "summary": "Hash-chained audit log, soft delete with TTL purge, and GDPR export and hard-delete.",
+  "schema": "blocks_compliance",
+  "billing": "meter",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "COMPLIANCE_HASH_CHAIN",
+      "description": "Enable hash chaining on the audit log. Makes tampering detectable at the cost of serialising audit writes.",
+      "required": false,
+      "default": "true"
+    },
+    {
+      "name": "COMPLIANCE_RETENTION_DAYS",
+      "description": "Days before soft-deleted rows are eligible for purge. Audit entries are never purged by this.",
+      "required": false,
+      "default": "30"
+    },
+    {
+      "name": "COMPLIANCE_AUDIT_RETENTION_DAYS",
+      "description": "Days audit entries are kept. Long by default: shortening it below your obligation is a compliance failure, not a storage optimisation.",
+      "required": false,
+      "default": "2555"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "23 4 * * *",
+      "functionPath": "/purge",
+      "description": "Purge soft-deleted rows past retention and expired audit entries. Off-peak and off the hour."
+    }
+  ]
+}

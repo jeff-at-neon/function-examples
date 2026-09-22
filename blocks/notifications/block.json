@@ -1,0 +1,79 @@
+{
+  "slug": "notifications",
+  "rank": 13,
+  "name": "Notification Engine",
+  "summary": "Transactional email, SMS, and push behind provider adapters, with templates, per-user preferences, quiet hours, and digests.",
+  "schema": "blocks_notifications",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "neon_auth"
+  ],
+  "dependsOn": [
+    "queue"
+  ],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NOTIFY_EMAIL_PROVIDER",
+      "description": "Adapter to use: resend, ses, or none.",
+      "required": false,
+      "default": "none"
+    },
+    {
+      "name": "NOTIFY_EMAIL_FROM",
+      "description": "Default From address.",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "NOTIFY_SMS_PROVIDER",
+      "description": "Adapter to use: twilio, sns, or none.",
+      "required": false,
+      "default": "none"
+    },
+    {
+      "name": "NOTIFY_DEDUPE_WINDOW_MINUTES",
+      "description": "Window in which an identical dedupe key is suppressed.",
+      "required": false,
+      "default": "60"
+    },
+    {
+      "name": "NOTIFY_QUIET_HOURS_DEFAULT",
+      "description": "Default quiet window as HH:MM-HH:MM in the user's timezone. Empty disables.",
+      "required": false,
+      "default": "22:00-08:00"
+    },
+    {
+      "name": "NOTIFY_BATCH_SIZE",
+      "description": "Notifications sent per invocation.",
+      "required": false,
+      "default": "50"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "* * * * *",
+      "functionPath": "/send",
+      "description": "Send due notifications, including those deferred past quiet hours."
+    },
+    {
+      "type": "schedule",
+      "cron": "19 8 * * *",
+      "functionPath": "/digest",
+      "description": "Build and send digest rollups."
+    }
+  ]
+}

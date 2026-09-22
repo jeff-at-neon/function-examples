@@ -1,0 +1,65 @@
+{
+  "slug": "pii-anonymizer",
+  "rank": 15,
+  "name": "PII Anonymizer for Branches",
+  "summary": "Deterministically masks personal data in a branch — database and Object Storage — so a prod copy is safe to hand to a contractor or an AI agent.",
+  "schema": "blocks_pii_anonymizer",
+  "billing": "meter",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "object_storage",
+    "branching"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "ANONYMIZE_SALT",
+      "description": "HMAC salt. Must be per-branch: a shared salt lets masked values be correlated across branches, and a leaked salt makes the mapping reversible.",
+      "required": true,
+      "example": "a-long-random-per-branch-secret"
+    },
+    {
+      "name": "ANONYMIZE_ALLOW_BRANCH_PATTERN",
+      "description": "Regex a branch name must match before masking runs. The safety interlock: masking is destructive and irreversible on real data.",
+      "required": false,
+      "default": "^(dev|preview|staging|test)"
+    },
+    {
+      "name": "ANONYMIZE_BATCH_ROWS",
+      "description": "Rows updated per statement, so a large table does not hold one transaction open for its entire duration.",
+      "required": false,
+      "default": "5000"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": []
+}

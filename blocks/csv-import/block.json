@@ -1,0 +1,98 @@
+{
+  "slug": "csv-import",
+  "rank": 11,
+  "name": "CSV / Excel Import",
+  "summary": "Spreadsheet lands in a bucket, validates into a staging table, merges typed, and writes a row-level error report back.",
+  "schema": "blocks_csv_import",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "object_storage"
+  ],
+  "dependsOn": [
+    "queue"
+  ],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "CSV_BUCKET",
+      "description": "Bucket to watch for spreadsheets.",
+      "required": true,
+      "example": "imports"
+    },
+    {
+      "name": "CSV_PREFIX",
+      "description": "Watched key prefix.",
+      "required": false,
+      "default": "imports/"
+    },
+    {
+      "name": "CSV_REPORT_PREFIX",
+      "description": "Where error reports are written. Must be disjoint from CSV_PREFIX, or reports retrigger the importer.",
+      "required": false,
+      "default": "import-reports/"
+    },
+    {
+      "name": "CSV_MAX_BYTES",
+      "description": "Largest file to import. Read whole, so this bounds memory.",
+      "required": false,
+      "default": "52428800"
+    },
+    {
+      "name": "CSV_MAX_ROWS",
+      "description": "Row ceiling per import.",
+      "required": false,
+      "default": "100000"
+    },
+    {
+      "name": "CSV_ABORT_ON_ERROR",
+      "description": "Abort the whole import on the first bad row instead of applying the good ones.",
+      "required": false,
+      "default": "false"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "storage_object_created",
+      "bucketEnv": "CSV_BUCKET",
+      "prefixEnv": "CSV_PREFIX",
+      "functionPath": "/import",
+      "description": "Import an uploaded spreadsheet."
+    },
+    {
+      "type": "schedule",
+      "cron": "29 * * * *",
+      "functionPath": "/reconcile",
+      "description": "Required by §5. Finds uploads the trigger missed and resets imports stuck mid-run."
+    }
+  ]
+}

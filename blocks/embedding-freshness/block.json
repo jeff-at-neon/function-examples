@@ -1,0 +1,63 @@
+{
+  "slug": "embedding-freshness",
+  "rank": 14,
+  "name": "Embedding Freshness Worker",
+  "summary": "Re-embeds rows whose source text changed, driven by a watermark or the outbox. Fixes pgvector's most common failure mode.",
+  "schema": "blocks_embedding_freshness",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "pgvector",
+    "ai_gateway"
+  ],
+  "dependsOn": [
+    "queue",
+    "rag"
+  ],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_AI_GATEWAY_API_KEY",
+      "description": "AI Gateway credential. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "FRESHNESS_BATCH_SIZE",
+      "description": "Rows examined per invocation. Each stale row becomes one queued re-embed job.",
+      "required": false,
+      "default": "200"
+    },
+    {
+      "name": "FRESHNESS_EMBEDDING_MODEL",
+      "description": "Must match the model used originally, or re-embedded vectors are not comparable with the rest of the index.",
+      "required": false,
+      "default": "text-embedding-3-small"
+    },
+    {
+      "name": "FRESHNESS_EMBEDDING_DIMENSIONS",
+      "description": "Must match the model and the vector column width.",
+      "required": false,
+      "default": "1536"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "*/5 * * * *",
+      "functionPath": "/scan",
+      "description": "Detect rows whose embedded text changed and queue re-embeds. Five minutes is a deliberate compromise: row-event triggers would make this near-instant."
+    }
+  ]
+}

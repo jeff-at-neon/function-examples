@@ -1,0 +1,13 @@
+{
+  "name": "@neon-blocks/block-semantic-cache",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neon Block: semantic cache for llm calls.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0",
+    "@neon-blocks/ai": "0.1.0"
+  }
+}
