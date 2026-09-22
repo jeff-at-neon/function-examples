@@ -1,0 +1,16 @@
+{
+  "name": "@neon-blocks/queue",
+  "version": "0.1.0",
+  "description": "Postgres-backed durable job queue: SKIP LOCKED claims, retries, DLQ, idempotency, concurrency caps.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0"
+  }
+}

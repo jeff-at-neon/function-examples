@@ -1,0 +1,28 @@
+{
+  "name": "neon-blocks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable Neon Functions you deploy next to your data — batteries-included backend blocks.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "blocks/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --build && vitest run --passWithNoTests",
+    "blocks": "node packages/cli/bin/neon-blocks.mjs",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

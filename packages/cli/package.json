@@ -1,0 +1,17 @@
+{
+  "name": "@neon-blocks/cli",
+  "version": "0.1.0",
+  "description": "Install, migrate, and manage Neon Blocks.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "neon-blocks": "./bin/neon-blocks.mjs"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "bin"],
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0",
+    "@neon-blocks/migrate": "0.1.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@neon-blocks/ai",
+  "version": "0.1.0",
+  "description": "AI Gateway-first embeddings, chat, and vision for Neon Blocks, with provider adapters.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@neon-blocks/events",
+  "version": "0.1.0",
+  "description": "Swappable event transport for Neon Blocks: outbox today, native row triggers tomorrow.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@neon-blocks/core",
+  "version": "0.1.0",
+  "description": "Shared runtime for Neon Blocks: config, pool, routing, trigger safety, observability.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0"
+  }
+}

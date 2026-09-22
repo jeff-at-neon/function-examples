@@ -1,0 +1,16 @@
+{
+  "name": "@neon-blocks/storage",
+  "version": "0.1.0",
+  "description": "S3-compatible Object Storage client for Neon Blocks, with HEAD-verify and presigned URLs.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0"
+  }
+}
