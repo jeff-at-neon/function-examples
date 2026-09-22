@@ -1,0 +1,14 @@
+{
+  "name": "@neon-blocks/block-webhooks-inbound",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neon Block: inbound webhook receiver with provider signature verification.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0",
+    "@neon-blocks/events": "0.1.0",
+    "@neon-blocks/queue": "0.1.0"
+  }
+}
