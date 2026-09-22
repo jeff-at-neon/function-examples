@@ -1,0 +1,20 @@
+{
+  "slug": "billing",
+  "rank": 8,
+  "name": "Billing Spine",
+  "summary": "Normalized subscriptions, local entitlement checks, idempotent usage metering, and dunning escalation.",
+  "schema": "blocks_billing",
+  "billing": "meter",
+  "depth": "implemented",
+  "capabilities": ["postgres", "neon_auth"],
+  "dependsOn": ["queue"],
+  "env": [
+    { "name": "DATABASE_URL", "description": "Branch connection string. Injected automatically by Neon.", "required": true, "injected": true },
+    { "name": "BILLING_GRACE_PERIOD_DAYS", "description": "Days of continued access after a payment fails. A failed payment is usually an expired card, not a churn decision, so cutting access instantly turns a recoverable problem into a lost customer.", "required": false, "default": "3" },
+    { "name": "BILLING_DUNNING_SCHEDULE", "description": "Comma-separated days-overdue thresholds at which to escalate, e.g. 0,3,7,14.", "required": false, "default": "0,3,7,14" },
+    { "name": "BILLING_TRIAL_WARNING_DAYS", "description": "How far ahead to announce a trial ending.", "required": false, "default": "3" }
+  ],
+  "triggers": [
+    { "type": "schedule", "cron": "13 7 * * *", "functionPath": "/sweep", "description": "Dunning escalation, trial-expiry notices, and usage rollups. Off-peak and off the hour." }
+  ]
+}
