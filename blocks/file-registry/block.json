@@ -1,0 +1,87 @@
+{
+  "slug": "file-registry",
+  "rank": 4,
+  "name": "File Registry + Signed Uploads",
+  "summary": "A SQL index of Object Storage: presigned uploads, pending→ready finalize, quotas, and joinable file metadata.",
+  "schema": "blocks_file_registry",
+  "billing": "free",
+  "depth": "implemented",
+  "capabilities": ["postgres", "object_storage"],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "S3-compatible Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "REGISTRY_BUCKET",
+      "description": "Bucket this registry indexes.",
+      "required": true,
+      "example": "uploads"
+    },
+    {
+      "name": "REGISTRY_PREFIX",
+      "description": "Key prefix indexed. Tenant isolation is enforced against this prefix.",
+      "required": false,
+      "default": "uploads/"
+    },
+    {
+      "name": "REGISTRY_UPLOAD_TTL_SECONDS",
+      "description": "Lifetime of a presigned PUT URL. Short by default: a leaked long-lived URL is an open write grant.",
+      "required": false,
+      "default": "900"
+    },
+    {
+      "name": "REGISTRY_MAX_UPLOAD_BYTES",
+      "description": "Largest upload the registry will issue a URL for, recorded so the finalizer can reject oversized objects.",
+      "required": false,
+      "default": "104857600"
+    },
+    {
+      "name": "REGISTRY_ABANDON_AFTER_MINUTES",
+      "description": "A pending upload with no matching object after this long is marked abandoned.",
+      "required": false,
+      "default": "60"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Strongly recommended.",
+      "required": false
+    }
+  ],
+  "triggers": [
+    {
+      "type": "storage_object_created",
+      "bucketEnv": "REGISTRY_BUCKET",
+      "prefixEnv": "REGISTRY_PREFIX",
+      "functionPath": "/finalize",
+      "description": "Flip a pending upload to ready, recording real size, content type, and etag from a HEAD."
+    },
+    {
+      "type": "schedule",
+      "cron": "41 * * * *",
+      "functionPath": "/reconcile",
+      "description": "Required by §5. Detects uploads the trigger missed, marks deletions (there are no delete events), and expires abandoned uploads."
+    }
+  ]
+}
