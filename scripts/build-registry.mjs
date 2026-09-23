@@ -13,9 +13,12 @@
  */
 
 import { mkdir, readFile, writeFile, rm, cp } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+const run = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const argOf = (flag, fallback) => {
@@ -25,11 +28,7 @@ const argOf = (flag, fallback) => {
 const outDir = path.resolve(root, argOf("--out", "dist-registry"));
 
 const { discoverBlocks } = await import(path.join(root, "packages/cli/dist/index.js"));
-const { loadMigrations } = await import(path.join(root, "packages/migrate/dist/index.js"));
 const esbuild = await import("esbuild");
-
-// Exact pin for the one external runtime dependency (@neon-blocks/* inline away in the bundle).
-const pgVersion = JSON.parse(await readFile(path.join(root, "node_modules/pg/package.json"), "utf8")).version;
 
 const SECRET_HINT = /SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL/;
 
@@ -70,26 +69,33 @@ for (const { manifest, dir } of blocks) {
 
     await mkdir(templateDir, { recursive: true });
 
-    // Bundle to a single standalone ESM file; pg stays external (native-ish, provided by runtime).
+    // Bundle to a single standalone ESM file at the archive root, named index.mjs (the runtime tries
+    // it first and always parses .mjs as ESM, so no package.json is needed). Everything is inlined —
+    // including pg — because the guest is bare Node 24 with no node_modules; only node:* builtins and
+    // pg's optional native/edge shims stay external.
     const result = await esbuild.build({
       entryPoints: [path.join(dir, "src/index.ts")],
       bundle: true,
       platform: "node",
       format: "esm",
       target: "node24",
-      external: ["pg"],
+      external: ["pg-native", "cloudflare:sockets"],
       keepNames: true,
-      outfile: path.join(templateDir, "index.js"),
+      outfile: path.join(templateDir, "index.mjs"),
       logLevel: "silent",
     });
     if (result.errors.length > 0) throw new Error(result.errors.map((e) => e.text).join("; "));
 
-    const bundle = await readFile(path.join(templateDir, "index.js"), "utf8");
+    const bundle = await readFile(path.join(templateDir, "index.mjs"), "utf8");
     if (/@neon-blocks\//.test(bundle)) {
       throw new Error("bundle still references @neon-blocks/* — it is not self-contained");
     }
+    if (/from\s*["']pg["']/.test(bundle)) {
+      throw new Error("bundle still imports 'pg' — it must be inlined (the guest has no node_modules)");
+    }
 
-    // README + migrations travel with the template so it is self-describing and renderable.
+    // README + migrations travel with the template so it is self-describing, renderable, and — for
+    // a self-migrating handler — the SQL is readable from /opt/function/migrations at runtime.
     const readme = await readFile(path.join(dir, "README.md"), "utf8").catch(() => "");
     if (readme) await writeFile(path.join(templateDir, "README.md"), readme);
     await cp(path.join(dir, "migrations"), path.join(templateDir, "migrations"), { recursive: true }).catch(() => {});
@@ -100,18 +106,24 @@ for (const { manifest, dir } of blocks) {
       provider: "neon",
       title: manifest.name,
       description: manifest.summary,
-      dependencies: [`pg@${pgVersion}`],
+      dependencies: [],
+      dependsOn: manifest.dependsOn ?? [],
       environment: toEnvironment(manifest.env),
       operations: manifest.operations.map((o) => ({
         id: o.id,
         title: o.title,
         description: o.description,
-        source: "index.js",
+        source: "index.mjs",
         route: sanitizeRoute(o.route),
         recommended: o.recommended === true,
       })),
     };
     await writeFile(path.join(templateDir, "template.json"), `${JSON.stringify(template, null, 2)}\n`);
+
+    // A deployable zip with index.mjs at the ROOT — the layout the nodejs24 runtime's resolveEntry
+    // expects (no subdirectory search). Contains the entry, migrations, and display metadata; env
+    // and secrets are NOT included (sent separately by the deploy API), keeping the artifact inert.
+    await run("zip", ["-q", "-r", "-X", path.join(outDir, `${id}.zip`), "."], { cwd: templateDir });
 
     templates.push({
       rank: manifest.rank,
@@ -120,6 +132,7 @@ for (const { manifest, dir } of blocks) {
         provider: "neon",
         title: manifest.name,
         description: manifest.summary,
+        dependsOn: manifest.dependsOn ?? [],
         path: `${id}/template.json`,
       },
     });

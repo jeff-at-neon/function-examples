@@ -20,6 +20,14 @@
 				"pattern": "^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*@\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
 			}
 		},
+		"dependsOn": {
+			"type": "array",
+			"description": "Ids of other templates this one requires installed first (foundations like queue). The installer resolves the transitive closure and installs in this order; independent blocks have an empty list.",
+			"items": {
+				"type": "string",
+				"pattern": "^[a-z0-9][a-z0-9-]*$"
+			}
+		},
 		"environment": {
 			"type": "array",
 			"items": {

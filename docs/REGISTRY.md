@@ -22,9 +22,10 @@ The generator emits a servable tree (base URL = registry root):
 ```
 /registry.json                        discovery index — fetch first
 /<id>/template.json                   one per template — fetch on select
-/<id>/index.js                        bundled, credential-free ESM handler (the operations' `source`)
+/<id>/index.mjs                       self-contained ESM handler (everything inlined, incl. pg)
 /<id>/README.md                       rich per-template docs
-/<id>/migrations/NNN_*.sql(+.down)    schema, for display
+/<id>/migrations/NNN_*.sql(+.down)    schema (readable at /opt/function/migrations at runtime)
+/<id>.zip                             deployable archive: index.mjs at ROOT + migrations/ + docs
 ```
 
 ## `registry.json` — the index
@@ -59,26 +60,32 @@ The generator emits a servable tree (base URL = registry root):
   "provider": "neon",
   "title": "Outbox + Durable Job Queue",
   "description": "Postgres-backed job queue and event outbox: retries, backoff, DLQ, idempotency, concurrency caps.",
-  "dependencies": ["pg@8.23.0"],
+  "dependencies": [],
+  "dependsOn": [],
   "environment": [
     { "name": "DATABASE_URL", "description": "Branch connection string.", "required": true, "injected": true, "secret": true },
     { "name": "NEON_BLOCKS_TRIGGER_SECRET", "description": "Shared secret appended to trigger paths as ?secret=. …", "required": false, "secret": true, "example": "a-long-random-string" },
     { "name": "QUEUE_BATCH_SIZE", "description": "Jobs claimed per invocation. …", "required": false, "default": "25" }
   ],
   "operations": [
-    { "id": "work",    "title": "POST /work",    "description": "cron, every minute — drain the outbox, then run due jobs", "source": "index.js", "route": "/work",   "recommended": true },
-    { "id": "sweep",   "title": "POST /sweep",   "description": "cron, daily — reclaim leases, purge, report DLQ depth",     "source": "index.js", "route": "/sweep",  "recommended": true },
-    { "id": "enqueue", "title": "POST /enqueue", "description": "HTTP — enqueue a job from application code",                 "source": "index.js", "route": "/enqueue","recommended": true },
-    { "id": "health",  "title": "GET /health",   "description": "Liveness and readiness, backed by the block's v_status view.", "source": "index.js", "route": "/health", "recommended": false }
+    { "id": "work",    "title": "POST /work",    "description": "cron, every minute — drain the outbox, then run due jobs", "source": "index.mjs", "route": "/work",   "recommended": true },
+    { "id": "sweep",   "title": "POST /sweep",   "description": "cron, daily — reclaim leases, purge, report DLQ depth",     "source": "index.mjs", "route": "/sweep",  "recommended": true },
+    { "id": "enqueue", "title": "POST /enqueue", "description": "HTTP — enqueue a job from application code",                 "source": "index.mjs", "route": "/enqueue","recommended": true },
+    { "id": "health",  "title": "GET /health",   "description": "Liveness and readiness, backed by the block's v_status view.", "source": "index.mjs", "route": "/health", "recommended": false }
   ]
 }
 ```
 
 ### Field semantics
 
-- **`dependencies`** — external runtime deps the deployed function needs, pinned to an exact
-  version (no ranges). The `@neon-blocks/*` workspace packages are bundled into `index.js` and are
-  **not** listed; today the only external dep is `pg`.
+- **`dependencies`** — external **npm** runtime deps that are *not* bundled. The guest is bare
+  Node 24 with no `node_modules`, so **everything is inlined into `index.mjs`, including `pg`** —
+  only `node:*` builtins stay external. This is normally `[]`.
+- **`dependsOn`** — ids of other **templates** (blocks) this one requires installed first, e.g.
+  `["queue"]`. Distinct from `dependencies` (npm). The installer resolves the transitive closure and
+  installs foundations first (`blocks_core`/`queue`); independent blocks have `[]`. Mirrored on each
+  `registry.json` entry so the browse UI can show "installs N blocks" without fetching every
+  template.
 - **`environment`** — every variable the function reads, carrying everything a deploy form needs:
   - `name`, `description` (always present).
   - `required` (always present) — whether the form must collect a value.
@@ -102,6 +109,25 @@ The generator emits a servable tree (base URL = registry root):
 Each block deploys as **one** Neon Function serving several routes/trigger-paths (see
 `scripts/deploy.mjs`). So operations map to that function's routes rather than to independently
 deployable modules — which is why they share a single `source`.
+
+## Deploy artifact contract (nodejs24 runtime)
+
+Confirmed against the Neon Functions runtime. Each template's `<id>.zip` deploys via the
+platform function-deploy API (`POST .../functions/{slug}/deployments`, multipart `zip` +
+`runtime: nodejs24` + `environment` JSON):
+
+- **`index.mjs` at the zip ROOT.** The runtime's `resolveEntry` only checks `/opt/function/index.mjs`
+  then `/opt/function/index.js` at the mount root — no subdirectory search. `.mjs` is always parsed
+  as ESM, so no `package.json` is needed.
+- **Fully self-contained.** No `node_modules`, no install at deploy — the runtime just `import()`s
+  the entry. Every dependency, **including `pg`**, is inlined by esbuild; only `node:*` (and pg's
+  optional `pg-native`/`cloudflare:sockets` shims) are external.
+- **Handler shape** `export default { fetch }` (optional `export function upgrade` for WebSockets).
+- **Env/secrets are NOT in the zip** — they go in the deploy API's `environment` field, keeping the
+  artifact inert and public-servable.
+- **Migrations ship inside the zip** (`migrations/…`, readable at `/opt/function/migrations` at
+  runtime) so a self-migrating handler can apply them on boot — the deploy API does not run them.
+- Size cap is 32 MiB zipped; blocks are ~60–230 KB each.
 
 ## Generating and validating
 
