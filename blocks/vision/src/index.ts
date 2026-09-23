@@ -22,6 +22,7 @@ import {
   getPool,
   json,
   loadConfig,
+  parseTriggerEvent,
   parseTriggerRequest,
   problem,
   Router,
@@ -87,11 +88,32 @@ const router = new Router();
 
 router.post("/analyze", async (request) => {
   assertTriggerAuthentic(request, { requireSecret: false });
-  const event = await parseTriggerRequest(request);
 
-  // A storage trigger that writes nothing is otherwise invisible — every early exit below returns
-  // cleanly with no row. Log the parsed delivery and each exit reason (with values) so an operator
-  // can see exactly what arrived and why nothing was analysed.
+  // DIAGNOSTIC: Neon's storage-trigger delivery does not match the assumed
+  // { type: "storage_object_created", data: { bucket_name, object_key } } shape — it parses with no
+  // type, so /analyze rejected it as wrong_trigger. Capture the raw delivery (query + headers + body,
+  // secrets redacted) so we can read the real field names and fix the parser. To be removed once the
+  // contract is known.
+  const rawBody = await request.text();
+  const url = new URL(request.url);
+  const query: Record<string, string> = {};
+  for (const [k, v] of url.searchParams) query[k] = /secret|token|key/i.test(k) ? "<redacted>" : v;
+  const headers: Record<string, string> = {};
+  for (const [k, v] of request.headers) {
+    headers[k] = /secret|token|authorization|cookie/i.test(k) ? "<redacted>" : v;
+  }
+  log.info("analyze raw delivery", { method: request.method, path: url.pathname, query, headers, body: rawBody.slice(0, 4000) });
+
+  let parsedBody: unknown = {};
+  if (rawBody.trim() !== "") {
+    try {
+      parsedBody = JSON.parse(rawBody);
+    } catch {
+      /* logged above as raw text */
+    }
+  }
+  const event = parseTriggerEvent(parsedBody, request.headers);
+
   log.info("analyze invoked", {
     type: event.type,
     bucketName: event.type === "storage_object_created" ? event.bucketName : undefined,
