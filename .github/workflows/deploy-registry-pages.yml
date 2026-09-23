@@ -42,10 +42,11 @@ jobs:
 
       - run: npm ci
 
-      # build-registry imports the compiled CLI (discoverBlocks); build it (and its
-      # deps) first. esbuild + the `zip` CLI are already present on the runner.
-      - name: Build the CLI
-        run: npx tsc --build packages/cli
+      # Build every workspace package: build-registry imports the compiled CLI
+      # (discoverBlocks), and esbuild must resolve each block's @neon-blocks/* imports
+      # from their dist/ when it bundles. esbuild + the `zip` CLI are on the runner.
+      - name: Build all packages
+        run: npx tsc --build
 
       - name: Build and validate the registry
         run: |
