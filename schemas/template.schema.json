@@ -12,6 +12,17 @@
 		"provider": { "type": "string" },
 		"title": { "type": "string", "minLength": 1 },
 		"description": { "type": "string", "minLength": 1 },
+		"logo": {
+			"type": "string",
+			"format": "uri",
+			"pattern": "^https://",
+			"maxLength": 2048,
+			"description": "Optional listing logo lifted into the generated registry index."
+		},
+		"layout": {
+			"description": "router generates one aggregate function with a URL router; separate deploys each operation independently under its own slug.",
+			"enum": ["router", "separate"]
+		},
 		"depth": {
 			"type": "string",
 			"enum": ["scaffold", "implemented"],
@@ -37,7 +48,7 @@
 			"type": "array",
 			"items": {
 				"type": "object",
-				"required": ["name", "description", "required"],
+				"required": ["name", "description"],
 				"additionalProperties": false,
 				"properties": {
 					"name": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" },
@@ -114,6 +125,11 @@
 						"description": "Relative path to the operation module under this template folder."
 					},
 					"route": { "type": "string", "pattern": "^/[A-Za-z0-9\\-._~/]*$" },
+					"slug": {
+						"type": "string",
+						"pattern": "^[a-z0-9]{1,20}$",
+						"description": "Separate layout only: the Neon deployment slug this operation registers under."
+					},
 					"recommended": {
 						"type": "boolean",
 						"description": "Whether this operation is part of the recommended default set. At least one operation must be true."
@@ -121,5 +137,18 @@
 				}
 			}
 		}
-	}
+	},
+	"allOf": [
+		{
+			"if": {
+				"required": ["layout"],
+				"properties": { "layout": { "const": "separate" } }
+			},
+			"then": {
+				"properties": {
+					"operations": { "items": { "required": ["slug"] } }
+				}
+			}
+		}
+	]
 }
