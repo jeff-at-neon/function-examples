@@ -47,16 +47,44 @@ function functionSlugFor(blockSlug) {
   return slug;
 }
 
+/** Data type of a variable, inferred from its default (falls back to string). */
+function inferType(e) {
+  const d = typeof e.default === "string" ? e.default.trim() : undefined;
+  if (d !== undefined && d !== "") {
+    if (/^-?\d+$/.test(d)) return "int";
+    if (Number.isFinite(Number(d))) return "number";
+    if (d === "true" || d === "false") return "boolean";
+    if (/^[[{]/.test(d)) return "json";
+  }
+  return "string";
+}
+
+/** Which form control the console should render. Vocabulary: bucket|schedule|json|number|secret|text. */
+function inferWidget(e, type, secret) {
+  if (secret) return "secret";
+  if (/_BUCKET$/.test(e.name)) return "bucket";
+  if (/CRON|_SCHEDULE$/.test(e.name)) return "schedule";
+  if (type === "json") return "json";
+  if (type === "int" || type === "number") return "number";
+  return "text";
+}
+
 function toEnvironment(env) {
-  return env.map((e) => ({
-    name: e.name,
-    description: e.description,
-    required: e.required === true,
-    ...(SECRET_HINT.test(e.name) ? { secret: true } : {}),
-    ...(e.injected === true ? { injected: true } : {}),
-    ...(typeof e.default === "string" ? { default: e.default } : {}),
-    ...(typeof e.example === "string" ? { example: e.example } : {}),
-  }));
+  return env.map((e) => {
+    const secret = SECRET_HINT.test(e.name);
+    const type = inferType(e);
+    return {
+      name: e.name,
+      description: e.description,
+      required: e.required === true,
+      ...(secret ? { secret: true } : {}),
+      ...(e.injected === true ? { injected: true } : {}),
+      ...(typeof e.default === "string" ? { default: e.default } : {}),
+      ...(typeof e.example === "string" ? { example: e.example } : {}),
+      type,
+      widget: inferWidget(e, type, secret),
+    };
+  });
 }
 
 await rm(outDir, { recursive: true, force: true });

@@ -118,9 +118,9 @@ Honest list, roughly in priority order:
    real answer.
 3. **JSON-blob config is wrong for a form.** `ROUTER_ROUTES` and `QUEUE_CONCURRENCY` are fine in a
    file and hostile in a UI. They should become structured config the console renders as real inputs.
-4. **No `widget` form-hint metadata.** `environment` says a field is required and secret, but not
-   that `ROUTER_BUCKET` is a bucket picker or `*_CRON` a schedule builder. Adding a `widget` hint to
-   the schema is straightforward and would improve the install experience.
+4. **JSON-blob config is still a raw string.** `ROUTER_ROUTES` / `QUEUE_CONCURRENCY` now carry
+   `widget: "json"` so the console can render a JSON editor, but they are still opaque strings in the
+   env rather than structured, individually-validated config. A structured form is the fuller fix.
 5. **Trigger-create API reach is unconfirmed.** `deploy.mjs` calls it; whether the browser console
    can call it directly (vs. via a backend) needs confirming, or scheduled/`/reconcile` paths never
    fire.

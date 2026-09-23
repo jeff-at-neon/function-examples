@@ -61,6 +61,16 @@
 					"example": {
 						"type": "string",
 						"description": "Illustrative value for the form's placeholder. Not a default."
+					},
+					"type": {
+						"type": "string",
+						"enum": ["string", "int", "number", "boolean", "json"],
+						"description": "Data type, for input coercion and validation before deploy."
+					},
+					"widget": {
+						"type": "string",
+						"enum": ["text", "secret", "number", "json", "bucket", "schedule"],
+						"description": "Form control the console should render for this variable."
 					}
 				}
 			}

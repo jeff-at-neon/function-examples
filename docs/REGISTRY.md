@@ -126,9 +126,13 @@ deploying to bring the schema up immediately, rather than waiting for organic tr
     variables are never `required` of the user.
   - `secret` — render as a secret input; never echo the value.
   - `default` — prefill for an optional variable. `example` — placeholder only, not a default.
+  - `type` — `string` | `int` | `number` | `boolean` | `json`, for input coercion/validation.
+  - `widget` — the control to render: `text` | `secret` | `number` | `json` | `bucket` | `schedule`.
+    Derived from the variable's name and default (e.g. `*_BUCKET` → `bucket`, a `{…}`/`[…]` default →
+    `json`, a numeric default → `number`).
 
-  A deploy form therefore prompts for `{ !injected }` variables, marks the `required` ones, uses
-  `secret` inputs where set, and prefills `default`.
+  A deploy form therefore prompts for `{ !injected }` variables, marks the `required` ones, renders
+  the `widget` (secret input, number field, JSON editor, bucket picker, …), and prefills `default`.
 - **`operations`** — the block's routes as selectable units. All operations share one `source`
   (`index.js`, the bundled handler); they differ by `route`. Every template has **at least one**
   `recommended: true` operation; `/health` is the only consistently non-recommended one. A UI
