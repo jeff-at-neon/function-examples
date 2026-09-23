@@ -2,17 +2,16 @@
 /**
  * Build the Neon Function Registry.
  *
- * Emits a servable tree under dist-registry/: a registry.json discovery index plus, per block, a
- * self-describing template.json, the bundled handler (index.js — the operations' shared source),
- * the README, and the migrations. Conforms to schemas/{registry,template}.schema.json.
+ * Emits a servable tree under dist-registry/: a registry.json discovery index plus each native
+ * block or lightweight source template. Conforms to schemas/{registry,template}.schema.json.
  *
  * Artifacts are public and inert: bundled code and metadata, no credentials
- * of any kind. Regenerated from each block's block.json, so it never drifts from source.
+ * of any kind. Regenerated from blocks/ and templates/, so it never drifts from source.
  *
  *   node scripts/build-registry.mjs [--out dist-registry]
  */
 
-import { mkdir, readFile, writeFile, rm, cp } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm, cp, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -198,6 +197,45 @@ for (const { manifest, dir } of blocks) {
   } catch (err) {
     failures++;
     console.error(`  ${id.padEnd(22)} FAILED: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+const lightweightRoot = path.join(root, "templates");
+const lightweightDirs = await readdir(lightweightRoot, { withFileTypes: true }).catch(() => []);
+
+for (const entry of lightweightDirs.filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+  const dir = path.join(lightweightRoot, entry.name);
+
+  try {
+    const template = JSON.parse(await readFile(path.join(dir, "template.json"), "utf8"));
+    if (template.id !== entry.name) {
+      throw new Error(`template id "${template.id}" must match directory "${entry.name}"`);
+    }
+    if (templates.some((candidate) => candidate.entry.id === template.id)) {
+      throw new Error(`template id "${template.id}" conflicts with an existing block`);
+    }
+
+    const templateDir = path.join(outDir, template.id);
+    await cp(dir, templateDir, { recursive: true });
+    const { logo, ...publishedTemplate } = template;
+    await writeFile(path.join(templateDir, "template.json"), `${JSON.stringify(publishedTemplate, null, 2)}\n`);
+
+    templates.push({
+      rank: Number.MAX_SAFE_INTEGER,
+      entry: {
+        id: template.id,
+        ...(template.provider ? { provider: template.provider } : {}),
+        title: template.title,
+        description: template.description,
+        path: `${template.id}/template.json`,
+        ...(logo ? { logo } : {}),
+      },
+    });
+
+    console.log(`  ${template.id.padEnd(22)} source  ${template.operations?.length ?? 0} op(s)`);
+  } catch (err) {
+    failures++;
+    console.error(`  ${entry.name.padEnd(22)} FAILED: ${err instanceof Error ? err.message : err}`);
   }
 }
 
