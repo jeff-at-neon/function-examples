@@ -1,6 +1,6 @@
-# Block 15 — PII Anonymizer for Branches
+# Block 15 — Anonymize data
 
-Deterministically masks personal data in a branch — database and Object Storage — so a prod copy is safe to hand to a contractor or an AI agent.
+Mask personal data in a branch so a copy is safe to share
 
 **Block 15 of 25**, numbered in build order.
 

@@ -1,6 +1,6 @@
-# Block 17 — Compliance Pack
+# Block 17 — Audit & compliance
 
-Hash-chained audit log, soft delete with TTL purge, and GDPR export and hard-delete.
+Tamper-evident audit trail, soft delete, and GDPR export and delete
 
 **Block 17 of 25**, numbered in build order.
 

@@ -1,8 +1,8 @@
 {
   "slug": "queue",
   "rank": 1,
-  "name": "Outbox + Durable Job Queue",
-  "summary": "Postgres-backed job queue and event outbox: retries, backoff, DLQ, idempotency, concurrency caps.",
+  "name": "Background jobs",
+  "summary": "Queue work and run it reliably with retries, backoff, and a dead-letter queue",
   "schema": "blocks_queue",
   "billing": "free",
   "depth": "implemented",

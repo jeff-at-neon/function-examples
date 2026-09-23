@@ -1,6 +1,6 @@
-# Block 14 — Embedding Freshness Worker
+# Block 14 — Fresh embeddings
 
-Re-embeds rows whose source text changed, driven by a watermark or the outbox. Fixes pgvector's most common failure mode.
+Re-embed rows whose source text changed so vector search stays accurate
 
 **Block 14 of 25**, numbered in build order.
 

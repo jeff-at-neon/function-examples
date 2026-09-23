@@ -1,6 +1,6 @@
-# Block 13 — Notification Engine
+# Block 13 — Notifications
 
-Transactional email, SMS, and push behind provider adapters, with templates, per-user preferences, quiet hours, and digests.
+Send email, SMS, and push with templates, preferences, and quiet hours
 
 **Block 13 of 25**, numbered in build order.
 

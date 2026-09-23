@@ -1,6 +1,6 @@
-# Block 20 — Semantic Cache for LLM Calls
+# Block 20 — LLM cache
 
-Caches model responses by embedding similarity, so a rephrased question reuses an existing answer.
+Reuse an answer for a rephrased question by embedding similarity
 
 **Block 20 of 25**, numbered in build order.
 

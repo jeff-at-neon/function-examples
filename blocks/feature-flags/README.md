@@ -1,6 +1,6 @@
-# Block 22 — Feature Flags and Experiments
+# Block 22 — Feature flags
 
-Deterministic bucketing, exposure logging, and a significance readout — flags that double as A/B tests.
+Deterministic rollout bucketing with exposure logging and A/B significance
 
 **Block 22 of 25**, numbered in build order.
 

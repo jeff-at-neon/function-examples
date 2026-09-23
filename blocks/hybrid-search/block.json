@@ -1,8 +1,8 @@
 {
   "slug": "hybrid-search",
   "rank": 7,
-  "name": "Hybrid Search",
-  "summary": "BM25 + vector + trigram retrieval fused by reciprocal rank, with typo tolerance and a query log for relevance tuning.",
+  "name": "Hybrid search",
+  "summary": "Combine keyword and semantic search with typo tolerance",
   "schema": "blocks_hybrid_search",
   "billing": "free",
   "depth": "implemented",

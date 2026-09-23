@@ -1,6 +1,6 @@
-# Block 23 — Image Derivatives
+# Block 23 — Image thumbnails
 
-Thumbnails and transforms with EXIF stripping, generated on read and cached, not eagerly on upload.
+Create resized, EXIF-stripped derivatives on read and cache them
 
 **Block 23 of 25**, numbered in build order.
 

@@ -1,8 +1,8 @@
 {
   "slug": "agent-memory",
   "rank": 21,
-  "name": "Agent Memory Store",
-  "summary": "Session transcripts, summarization compaction, and retrieval for LLM agents — so a long conversation stays inside the context window.",
+  "name": "Agent memory",
+  "summary": "Store, summarize, and recall conversation history for LLM agents",
   "schema": "blocks_agent_memory",
   "billing": "free",
   "depth": "implemented",

@@ -1,8 +1,8 @@
 {
   "slug": "feature-flags",
   "rank": 22,
-  "name": "Feature Flags and Experiments",
-  "summary": "Deterministic bucketing, exposure logging, and a significance readout — flags that double as A/B tests.",
+  "name": "Feature flags",
+  "summary": "Deterministic rollout bucketing with exposure logging and A/B significance",
   "schema": "blocks_feature_flags",
   "billing": "free",
   "depth": "implemented",

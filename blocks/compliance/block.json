@@ -1,8 +1,8 @@
 {
   "slug": "compliance",
   "rank": 17,
-  "name": "Compliance Pack",
-  "summary": "Hash-chained audit log, soft delete with TTL purge, and GDPR export and hard-delete.",
+  "name": "Audit & compliance",
+  "summary": "Tamper-evident audit trail, soft delete, and GDPR export and delete",
   "schema": "blocks_compliance",
   "billing": "meter",
   "depth": "implemented",

@@ -1,8 +1,8 @@
 {
   "slug": "image-derivatives",
   "rank": 23,
-  "name": "Image Derivatives",
-  "summary": "Thumbnails and transforms with EXIF stripping, generated on read and cached, not eagerly on upload.",
+  "name": "Image thumbnails",
+  "summary": "Create resized, EXIF-stripped derivatives on read and cache them",
   "schema": "blocks_image_derivatives",
   "billing": "meter",
   "depth": "implemented",

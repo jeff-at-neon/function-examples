@@ -1,7 +1,6 @@
-# Block 1 — Outbox + Durable Job Queue
+# Block 1 — Background jobs
 
-Postgres-backed job queue and event outbox. Retries with jittered backoff, dead-letter queue,
-idempotency keys, lease-based crash recovery, and per-type concurrency caps.
+Queue work and run it reliably with retries, backoff, and a dead-letter queue
 
 **Rank #1 of 25.** Twelve other blocks depend on this one's contract, and it is the reference
 implementation for every rule in [docs/CONVENTIONS.md](../../docs/CONVENTIONS.md).

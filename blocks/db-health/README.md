@@ -1,6 +1,6 @@
-# Block 25 — Database Health Pack
+# Block 25 — Database health
 
-Slow-query digest, unused-index and bloat detection, long-transaction alerts, and trend comparison across snapshots.
+Surface slow queries, unused indexes, bloat, and long transactions
 
 **Block 25 of 25**, numbered in build order.
 

@@ -1,7 +1,6 @@
-# Block 6 — Inbound Webhook Kit
+# Block 6 — Receive webhooks
 
-Per-provider signature verification, a raw archive, dedupe, and replay. Stripe, GitHub, Shopify,
-Slack, Clerk/Svix, plus a generic HMAC verifier.
+Verify, dedupe, and store Stripe, GitHub, Shopify, and Slack events
 
 **Rank #6 of 25.** Everyone needs this; everyone gets the verification subtly wrong.
 

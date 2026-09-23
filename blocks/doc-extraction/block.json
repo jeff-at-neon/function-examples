@@ -1,8 +1,8 @@
 {
   "slug": "doc-extraction",
   "rank": 16,
-  "name": "Structured Document Extraction",
-  "summary": "Invoices, receipts, and forms become typed rows with per-field confidence and a human-review queue.",
+  "name": "Document extraction",
+  "summary": "Turn invoices, receipts, and forms into typed rows with confidence scores",
   "schema": "blocks_doc_extraction",
   "billing": "meter",
   "depth": "implemented",

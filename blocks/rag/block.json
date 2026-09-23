@@ -1,8 +1,8 @@
 {
   "slug": "rag",
   "rank": 2,
-  "name": "Document → RAG Ingestion",
-  "summary": "Drop a document in a bucket; it becomes semantically searchable. Extract, chunk, embed, upsert to pgvector.",
+  "name": "Document search",
+  "summary": "Turn uploaded files into semantic search with pgvector",
   "schema": "blocks_rag",
   "billing": "free",
   "depth": "implemented",

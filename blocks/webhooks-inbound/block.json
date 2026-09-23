@@ -1,8 +1,8 @@
 {
   "slug": "webhooks-inbound",
   "rank": 6,
-  "name": "Inbound Webhook Kit",
-  "summary": "Per-provider signature verification, raw archive, dedupe, and replay for Stripe, GitHub, Shopify, Slack, and Clerk.",
+  "name": "Receive webhooks",
+  "summary": "Verify, dedupe, and store Stripe, GitHub, Shopify, and Slack events",
   "schema": "blocks_webhooks_inbound",
   "billing": "free",
   "depth": "implemented",

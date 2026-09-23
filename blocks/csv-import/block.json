@@ -1,8 +1,8 @@
 {
   "slug": "csv-import",
   "rank": 11,
-  "name": "CSV / Excel Import",
-  "summary": "Spreadsheet lands in a bucket, validates into a staging table, merges typed, and writes a row-level error report back.",
+  "name": "CSV import",
+  "summary": "Validate an uploaded spreadsheet into Postgres with a row-level error report",
   "schema": "blocks_csv_import",
   "billing": "free",
   "depth": "implemented",

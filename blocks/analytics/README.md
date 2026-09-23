@@ -1,6 +1,6 @@
-# Block 24 — Event Analytics
+# Block 24 — Product analytics
 
-Event ingest, sessionization, and a funnel, retention, and cohort query pack over your own Postgres.
+Ingest events and run funnel, retention, and cohort queries in Postgres
 
 **Block 24 of 25**, numbered in build order.
 

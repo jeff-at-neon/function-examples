@@ -1,7 +1,6 @@
-# Block 10 — Outbound Webhook Delivery
+# Block 10 — Send webhooks
 
-Your users' customers register endpoints; this signs and delivers events to them with retries,
-per-endpoint circuit breaking, and a delivery log they can inspect.
+Sign and deliver events to customer endpoints with retries
 
 **Block 10 of 25**, numbered in build order. Outbound webhook delivery is a well-understood problem
 with mature dedicated providers, which is worth knowing before building it yourself — the value here

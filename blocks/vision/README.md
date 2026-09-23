@@ -1,7 +1,6 @@
-# Block 9 — AI Vision Enrichment
+# Block 9 — Image analysis
 
-Tags, captions, **auto alt text**, and OCR for uploaded images. Makes images searchable and closes
-an accessibility gap nobody fills by hand.
+Auto-generate tags, captions, alt text, and OCR for uploads
 
 **Rank #9 of 25.** Ranked deliberately above the CPU-bound image work in block 23, for a reason
 worth stating.

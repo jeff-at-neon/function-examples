@@ -1,8 +1,8 @@
 {
   "slug": "notifications",
   "rank": 13,
-  "name": "Notification Engine",
-  "summary": "Transactional email, SMS, and push behind provider adapters, with templates, per-user preferences, quiet hours, and digests.",
+  "name": "Notifications",
+  "summary": "Send email, SMS, and push with templates, preferences, and quiet hours",
   "schema": "blocks_notifications",
   "billing": "free",
   "depth": "implemented",

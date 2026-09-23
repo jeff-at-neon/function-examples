@@ -1,7 +1,6 @@
-# Block 4 — File Registry + Signed Uploads
+# Block 4 — File uploads
 
-A SQL index of Object Storage. Presigned direct uploads, `pending → ready` finalize, per-tenant
-listings, quotas, and file metadata you can join and foreign-key against.
+Presigned uploads to Object Storage with a queryable SQL index
 
 **Rank #4 of 25 — the keystone of the storage family.** Blocks 5, 9, 11, 18, 19, and 23 all read
 from this table.
