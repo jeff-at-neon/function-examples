@@ -1,8 +1,8 @@
 {
   "slug": "db-health",
   "rank": 25,
-  "name": "Database Health Pack",
-  "summary": "Slow-query digest, unused-index and bloat detection, long-transaction alerts, and trend comparison across snapshots.",
+  "name": "Database health",
+  "summary": "Surface slow queries, unused indexes, bloat, and long transactions",
   "schema": "blocks_db_health",
   "billing": "free",
   "depth": "implemented",

@@ -1,6 +1,6 @@
-# Block 21 — Agent Memory Store
+# Block 21 — Agent memory
 
-Session transcripts, summarization compaction, and retrieval for LLM agents — so a long conversation stays inside the context window.
+Store, summarize, and recall conversation history for LLM agents
 
 **Block 21 of 25**, numbered in build order.
 

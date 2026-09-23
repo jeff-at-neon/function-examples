@@ -1,6 +1,6 @@
-# Block 16 — Structured Document Extraction
+# Block 16 — Document extraction
 
-Invoices, receipts, and forms become typed rows with per-field confidence and a human-review queue.
+Turn invoices, receipts, and forms into typed rows with confidence scores
 
 **Block 16 of 25**, numbered in build order.
 

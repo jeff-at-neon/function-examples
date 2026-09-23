@@ -1,8 +1,8 @@
 {
   "slug": "moderation",
   "rank": 18,
-  "name": "Moderation and Quarantine",
-  "summary": "Classifies uploads and text for abuse, and quarantines by default so unreviewed content is never served.",
+  "name": "Content moderation",
+  "summary": "Classify content for abuse and quarantine it until reviewed",
   "schema": "blocks_moderation",
   "billing": "meter",
   "depth": "implemented",

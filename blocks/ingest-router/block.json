@@ -1,8 +1,8 @@
 {
   "slug": "ingest-router",
   "rank": 5,
-  "name": "Ingest Router",
-  "summary": "One storage trigger per bucket, dispatched by file type. Centralizes etag idempotency, HEAD-verify, and loop safety.",
+  "name": "Process uploads",
+  "summary": "Route each uploaded file to the right handler by type",
   "schema": "blocks_ingest_router",
   "billing": "free",
   "depth": "implemented",

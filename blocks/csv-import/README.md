@@ -1,6 +1,6 @@
-# Block 11 — CSV / Excel Import
+# Block 11 — CSV import
 
-Spreadsheet lands in a bucket, validates into a staging table, merges typed, and writes a row-level error report back.
+Validate an uploaded spreadsheet into Postgres with a row-level error report
 
 **Block 11 of 25**, numbered in build order.
 

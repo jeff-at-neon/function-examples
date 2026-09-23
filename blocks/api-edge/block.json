@@ -1,8 +1,8 @@
 {
   "slug": "api-edge",
   "rank": 12,
-  "name": "API Edge Pack",
-  "summary": "Hashed scoped API keys, per-tenant rate limits and quotas, and idempotency-key middleware.",
+  "name": "API keys & limits",
+  "summary": "Hashed API keys, per-tenant rate limits, and idempotency for your API",
   "schema": "blocks_api_edge",
   "billing": "free",
   "depth": "implemented",

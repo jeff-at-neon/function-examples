@@ -1,8 +1,8 @@
 {
   "slug": "embedding-freshness",
   "rank": 14,
-  "name": "Embedding Freshness Worker",
-  "summary": "Re-embeds rows whose source text changed, driven by a watermark or the outbox. Fixes pgvector's most common failure mode.",
+  "name": "Fresh embeddings",
+  "summary": "Re-embed rows whose source text changed so vector search stays accurate",
   "schema": "blocks_embedding_freshness",
   "billing": "free",
   "depth": "implemented",

@@ -1,8 +1,8 @@
 {
   "slug": "file-registry",
   "rank": 4,
-  "name": "File Registry + Signed Uploads",
-  "summary": "A SQL index of Object Storage: presigned uploads, pending→ready finalize, quotas, and joinable file metadata.",
+  "name": "File uploads",
+  "summary": "Presigned uploads to Object Storage with a queryable SQL index",
   "schema": "blocks_file_registry",
   "billing": "free",
   "depth": "implemented",

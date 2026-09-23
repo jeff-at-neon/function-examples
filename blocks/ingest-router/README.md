@@ -1,7 +1,6 @@
-# Block 5 — Ingest Router
+# Block 5 — Process uploads
 
-One storage trigger per bucket, dispatched in-function by detected file type. Centralizes the
-three things every storage block would otherwise rediscover the hard way.
+Route each uploaded file to the right handler by type
 
 **Rank #5 of 25.** Ranked above the pipelines it feeds, because those pipelines are safe only if
 this exists.

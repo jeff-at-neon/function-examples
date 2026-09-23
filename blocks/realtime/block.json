@@ -1,8 +1,8 @@
 {
   "slug": "realtime",
   "rank": 3,
-  "name": "Realtime Fan-out",
-  "summary": "LISTEN/NOTIFY to SSE and WebSocket, with presence and live counters. No Redis, no separate broker service.",
+  "name": "Realtime updates",
+  "summary": "Push live updates to clients over WebSocket and SSE, backed by Postgres",
   "schema": "blocks_realtime",
   "billing": "free",
   "depth": "implemented",

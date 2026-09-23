@@ -1,8 +1,8 @@
 {
   "slug": "webhooks-outbound",
   "rank": 10,
-  "name": "Outbound Webhook Delivery",
-  "summary": "Sign and deliver events to your users' customers: HMAC signing with rotation, backoff, per-endpoint circuit breaking, delivery log.",
+  "name": "Send webhooks",
+  "summary": "Sign and deliver events to customer endpoints with retries",
   "schema": "blocks_webhooks_outbound",
   "billing": "meter",
   "depth": "implemented",

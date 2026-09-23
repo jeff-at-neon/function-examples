@@ -1,8 +1,8 @@
 {
   "slug": "billing",
   "rank": 8,
-  "name": "Billing Spine",
-  "summary": "Normalized subscriptions, local entitlement checks, idempotent usage metering, and dunning escalation.",
+  "name": "Stripe billing",
+  "summary": "Mirror subscriptions and check entitlements locally, off the request path",
   "schema": "blocks_billing",
   "billing": "meter",
   "depth": "implemented",

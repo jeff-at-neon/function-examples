@@ -1,7 +1,6 @@
-# Block 8 — Billing Spine
+# Block 8 — Stripe billing
 
-Normalized subscriptions, **local** entitlement checks, idempotent usage metering, and dunning
-escalation. Provider-agnostic: Stripe, Polar, Paddle, or anything that emits subscription events.
+Mirror subscriptions and check entitlements locally, off the request path
 
 **Block 8 of 25**, numbered in build order.
 

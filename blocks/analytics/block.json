@@ -1,8 +1,8 @@
 {
   "slug": "analytics",
   "rank": 24,
-  "name": "Event Analytics",
-  "summary": "Event ingest, sessionization, and a funnel, retention, and cohort query pack over your own Postgres.",
+  "name": "Product analytics",
+  "summary": "Ingest events and run funnel, retention, and cohort queries in Postgres",
   "schema": "blocks_analytics",
   "billing": "free",
   "depth": "implemented",

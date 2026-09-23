@@ -1,7 +1,6 @@
-# Block 7 — Hybrid Search
+# Block 7 — Hybrid search
 
-BM25 + vector + trigram retrieval, combined by **reciprocal rank fusion**. Typo tolerance, accent
-folding, per-request weight overrides, and a query log built for relevance tuning.
+Combine keyword and semantic search with typo tolerance
 
 **Rank #7 of 25.** Completes block 2 — ingestion without good retrieval is half a product.
 

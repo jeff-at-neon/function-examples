@@ -1,6 +1,6 @@
-# Block 18 — Moderation and Quarantine
+# Block 18 — Content moderation
 
-Classifies uploads and text for abuse, and quarantines by default so unreviewed content is never served.
+Classify content for abuse and quarantine it until reviewed
 
 **Block 18 of 25**, numbered in build order.
 

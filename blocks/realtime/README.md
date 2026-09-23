@@ -1,7 +1,6 @@
-# Block 3 — Realtime Fan-out
+# Block 3 — Realtime updates
 
-Postgres `LISTEN/NOTIFY` bridged to SSE and WebSocket, with presence, gap-free reconnects, and
-live counters. **No Redis. No separate always-on broker service.**
+Push live updates to clients over WebSocket and SSE, backed by Postgres
 
 **Rank #3 of 25 — and the one block that is genuinely hard to build anywhere else.**
 

@@ -1,7 +1,6 @@
-# Block 2 — Document → RAG Ingestion
+# Block 2 — Document search
 
-Drop a document in a bucket; it becomes semantically searchable. Extract → chunk → embed →
-pgvector, driven by a storage trigger with a cron reconciler behind it.
+Turn uploaded files into semantic search with pgvector
 
 **Rank #2 of 25.** The catalog's flagship demo: it lights up Object Storage, pgvector, AI
 Gateway, and Functions in a single gesture, and it's the thing people most often want to build.

@@ -1,8 +1,8 @@
 {
   "slug": "vision",
   "rank": 9,
-  "name": "AI Vision Enrichment",
-  "summary": "Tags, captions, auto alt text, and OCR for uploaded images. Network-bound, so it bills at the cheap waiting rate.",
+  "name": "Image analysis",
+  "summary": "Auto-generate tags, captions, alt text, and OCR for uploads",
   "schema": "blocks_vision",
   "billing": "meter",
   "depth": "implemented",

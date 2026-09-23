@@ -1,6 +1,6 @@
-# Block 12 — API Edge Pack
+# Block 12 — API keys & limits
 
-Hashed scoped API keys, per-tenant rate limits and quotas, and idempotency-key middleware.
+Hashed API keys, per-tenant rate limits, and idempotency for your API
 
 **Block 12 of 25**, numbered in build order.
 

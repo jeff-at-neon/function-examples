@@ -1,8 +1,8 @@
 {
   "slug": "pii-anonymizer",
   "rank": 15,
-  "name": "PII Anonymizer for Branches",
-  "summary": "Deterministically masks personal data in a branch — database and Object Storage — so a prod copy is safe to hand to a contractor or an AI agent.",
+  "name": "Anonymize data",
+  "summary": "Mask personal data in a branch so a copy is safe to share",
   "schema": "blocks_pii_anonymizer",
   "billing": "meter",
   "depth": "implemented",
