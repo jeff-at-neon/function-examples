@@ -13,8 +13,5 @@ coverage/
 # Kept out of the public repo deliberately.
 .internal/
 
-# Release build output; produced by scripts/build-release.mjs
-dist-release/
-
 # Function registry build output; produced by scripts/build-registry.mjs
 dist-registry/

@@ -2,30 +2,28 @@
 /**
  * Deploy blocks to a real Neon project.
  *
- * Does what the console will do, from the command line: apply migrations, deploy the bundled
- * function, create its triggers, and record the installed version. Useful on its own for testing,
- * and it is the reference implementation of the install sequence in docs/CONSOLE.md.
+ * Does what the console will do, from the command line: deploy the bundled function, create its
+ * triggers, and record the installed version. Migrations are NOT applied here — every handler is
+ * self-migrating (it applies its own migrations on first request), so deploying the function is the
+ * install. Useful on its own for testing, and the reference implementation of the install sequence.
  *
  *   node scripts/deploy.mjs list
  *   node scripts/deploy.mjs install <slug> [--dry-run]
  *   node scripts/deploy.mjs status
  *   node scripts/deploy.mjs uninstall <slug>
  *
- * Needs NEON_API_KEY, NEON_PROJECT_ID, and DATABASE_URL (see .env.example). Reads artifacts from
- * dist-release/, so run `node scripts/build-release.mjs` first.
+ * Needs NEON_API_KEY, NEON_PROJECT_ID, and DATABASE_URL (see .env.example). Reads the registry from
+ * dist-registry/, so run `node scripts/build-registry.mjs` first.
  */
 
-import { readFile, readdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { createHash, randomBytes } from "node:crypto";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const run = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const API = "https://console.neon.tech/api/v2";
+const REGISTRY_DIR = path.join(root, "dist-registry");
 
 // ─── env ──────────────────────────────────────────────────────────────────────
 
@@ -126,32 +124,26 @@ async function resolveBranch() {
   return primary.id;
 }
 
-// ─── artifacts ────────────────────────────────────────────────────────────────
+// ─── registry ───────────────────────────────────────────────────────────────
 
-async function loadCatalog() {
-  const file = path.join(root, "dist-release", "catalog.json");
+async function loadRegistry() {
   try {
-    return JSON.parse(await readFile(file, "utf8"));
+    return JSON.parse(await readFile(path.join(REGISTRY_DIR, "registry.json"), "utf8"));
   } catch {
-    console.error("No dist-release/catalog.json. Build it first:");
-    console.error("  node scripts/build-release.mjs --version 0.1.0");
+    console.error("No dist-registry/registry.json. Build it first:");
+    console.error("  node scripts/build-registry.mjs");
     process.exit(1);
   }
 }
 
-/** Extract a block's tarball and verify its digest against the catalog. */
-async function stageArtifact(entry) {
-  const tarball = path.join(root, "dist-release", entry.artifact.file);
-  const bytes = await readFile(tarball);
+/** The full self-describing template for one block (environment, triggers, operations). */
+async function loadTemplate(id) {
+  return JSON.parse(await readFile(path.join(REGISTRY_DIR, id, "template.json"), "utf8"));
+}
 
-  const digest = createHash("sha256").update(bytes).digest("hex");
-  if (digest !== entry.artifact.sha256) {
-    throw new Error(`${entry.artifact.file} sha256 does not match catalog.json`);
-  }
-
-  const dir = await mkdtemp(path.join(tmpdir(), `neon-block-${entry.slug}-`));
-  await run("tar", ["-xzf", tarball, "-C", dir]);
-  return dir;
+/** Installed-version stamp: the repo version, since the registry carries no per-block version. */
+async function repoVersion() {
+  return JSON.parse(await readFile(path.join(root, "package.json"), "utf8")).version;
 }
 
 // ─── database ─────────────────────────────────────────────────────────────────
@@ -174,16 +166,11 @@ const dryRun = process.argv.includes("--dry-run");
 
 switch (command) {
   case "list": {
-    const catalog = await loadCatalog();
-    console.log(`\nCatalog ${catalog.release} — ${catalog.blockCount} blocks\n`);
-    for (const b of catalog.blocks) {
-      const prompts = b.config.filter((c) => !c.injected && c.required).length;
-      console.log(
-        `${String(b.order).padStart(2)}. ${b.slug.padEnd(22)} ` +
-          `fn:${functionSlugFor(b.slug).padEnd(18)} ` +
-          `${b.depth === "implemented" ? "impl " : "scaff"} ` +
-          `${String(prompts)} required field(s)`,
-      );
+    const registry = await loadRegistry();
+    console.log(`\nNeon Function Registry — ${registry.templates.length} templates\n`);
+    for (const t of registry.templates) {
+      const deps = t.dependsOn?.length ? `  needs: ${t.dependsOn.join(", ")}` : "";
+      console.log(`  ${t.id.padEnd(22)} fn:${functionSlugFor(t.id).padEnd(18)}${deps}`);
     }
     console.log("\nInstall one: node scripts/deploy.mjs install <slug>");
     break;
@@ -195,196 +182,159 @@ switch (command) {
       process.exit(1);
     }
 
-    const catalog = await loadCatalog();
-    const entry = catalog.blocks.find((b) => b.slug === target);
-    if (!entry) {
+    const registry = await loadRegistry();
+    if (!registry.templates.some((t) => t.id === target)) {
       console.error(`Unknown block "${target}". Run: node scripts/deploy.mjs list`);
       process.exit(1);
     }
+    const template = await loadTemplate(target);
 
     // Dependencies first, or a block referencing a dependency's schema fails on a missing table.
-    if (entry.dependsOn.length > 0) {
-      console.log(`Note: ${entry.slug} depends on ${entry.dependsOn.join(", ")} — install those first.`);
+    if (template.dependsOn?.length) {
+      console.log(`Note: ${target} depends on ${template.dependsOn.join(", ")} — install those first.`);
     }
 
-    // Config check before touching anything. Failing here costs nothing; failing after migrations
-    // have applied leaves a half-installed block.
-    const missing = entry.config
+    // Config check before touching anything. Failing here costs nothing.
+    const missing = template.environment
       .filter((c) => c.required && !c.injected && !env[c.name])
       .map((c) => c.name);
     if (missing.length > 0) {
-      console.error(`\nCannot install ${entry.slug}: missing required configuration.`);
+      console.error(`\nCannot install ${target}: missing required configuration.`);
       for (const name of missing) {
-        const spec = entry.config.find((c) => c.name === name);
+        const spec = template.environment.find((c) => c.name === name);
         console.error(`  ${name} — ${spec.description}`);
         if (spec.example) console.error(`    example: ${spec.example}`);
       }
       process.exit(1);
     }
 
-    const functionSlug = functionSlugFor(entry.slug);
-    const dir = await stageArtifact(entry);
+    const functionSlug = functionSlugFor(target);
+    const zipBytes = await readFile(path.join(REGISTRY_DIR, `${target}.zip`)).catch(() => {
+      console.error(`No ${target}.zip in dist-registry/. Run: node scripts/build-registry.mjs`);
+      process.exit(1);
+    });
 
-    try {
-      console.log(`\nInstalling ${entry.slug} ${entry.version} as function "${functionSlug}"`);
-      if (dryRun) console.log("(dry run — no changes will be made)\n");
+    console.log(`\nInstalling ${target} as function "${functionSlug}"`);
+    if (dryRun) console.log("(dry run — no changes will be made)\n");
 
-      // 1. Migrations.
-      const migrationDir = path.join(dir, "migrations");
-      const files = (await readdir(migrationDir))
-        .filter((f) => f.endsWith(".sql") && !f.endsWith(".down.sql"))
-        .sort();
+    // Migrations are NOT applied here: the handler self-migrates on first request (the zip ships
+    // migrations/ and applies them idempotently). Deploying the function is the install.
 
-      console.log(`  migrations: ${files.length}`);
-      if (!dryRun) {
-        await withPool(async (pool) => {
-          const { applyMigrations, loadMigrations } = await import(
-            path.join(root, "packages/migrate/dist/index.js")
-          );
-          const migrations = await loadMigrations(migrationDir);
-          const result = await applyMigrations(pool, entry.slug, migrations);
-          console.log(`    applied ${result.applied.length}, skipped ${result.skipped.length}`);
-          if (result.drifted.length > 0) {
-            throw new Error(
-              `drifted migrations: ${result.drifted.map((d) => d.version).join(", ")}`,
-            );
-          }
-        });
-      }
+    // Per-install trigger secret. Neon does not sign trigger delivery, so this is the only thing
+    // distinguishing a real event from a forged POST. Generated fresh per deployment.
+    const triggerSecret = env["NEON_BLOCKS_TRIGGER_SECRET"] ?? randomBytes(32).toString("base64url");
 
-      // 2. Per-install trigger secret. Neon does not sign trigger delivery, so this is the only
-      // thing distinguishing a real event from a forged POST. Generated fresh per deployment and
-      // never reused across projects.
-      const triggerSecret = env["NEON_BLOCKS_TRIGGER_SECRET"] ?? randomBytes(32).toString("base64url");
+    // Environment for the function. Injected variables are excluded: Neon supplies those, and
+    // passing our own would override the platform's.
+    const functionEnv = {};
+    for (const c of template.environment) {
+      if (c.injected) continue;
+      if (c.name === "NEON_BLOCKS_TRIGGER_SECRET") functionEnv[c.name] = triggerSecret;
+      else if (env[c.name]) functionEnv[c.name] = env[c.name];
+      else if (c.default !== undefined && c.default !== "") functionEnv[c.name] = c.default;
+    }
+    console.log(`  environment: ${Object.keys(functionEnv).length} variable(s)`);
 
-      // 3. Environment for the function. Injected variables are excluded: Neon supplies those, and
-      // passing our own would override the platform's.
-      const functionEnv = {};
-      for (const c of entry.config) {
-        if (c.injected) continue;
-        if (c.name === "NEON_BLOCKS_TRIGGER_SECRET") {
-          functionEnv[c.name] = triggerSecret;
-        } else if (env[c.name]) {
-          functionEnv[c.name] = env[c.name];
-        } else if (c.default !== null) {
-          functionEnv[c.name] = c.default;
-        }
-      }
-      console.log(`  environment: ${Object.keys(functionEnv).length} variable(s)`);
+    // A dry run exists so someone can see the plan before they have an API key.
+    if (!dryRun) requireEnv("NEON_API_KEY", "NEON_PROJECT_ID");
+    const branchId = dryRun ? "(dry-run)" : await resolveBranch();
 
-      // 4. Deploy. The API takes multipart/form-data with a zip, not JSON.
-      //
-      // Credentials are only required for a real deploy. A dry run exists precisely so someone can
-      // see the plan before they have an API key, so demanding one here would defeat it.
-      if (!dryRun) requireEnv("NEON_API_KEY", "NEON_PROJECT_ID");
-      const branchId = dryRun ? "(dry-run)" : await resolveBranch();
+    // Deploy the registry zip directly — index.mjs at the root, migrations/ alongside. The API
+    // takes multipart/form-data with a zip, not JSON.
+    if (!dryRun) {
+      const form = new FormData();
+      form.append("zip", new Blob([zipBytes]), `${target}.zip`);
+      form.append("runtime", "nodejs24");
+      form.append("environment", JSON.stringify(functionEnv));
 
-      if (!dryRun) {
-        const zipPath = path.join(dir, "function.zip");
-        // Zip only what the runtime needs. Shipping migrations inside the function would work but
-        // put SQL on a public endpoint's filesystem for no reason.
-        await run("zip", ["-q", "-j", zipPath, path.join(dir, "index.js")]);
+      const deployment = await api(
+        "POST",
+        `/projects/${env["NEON_PROJECT_ID"]}/branches/${branchId}/functions/${functionSlug}/deployments`,
+        { formData: form },
+      );
+      console.log(`  deployed: ${deployment.id ?? "ok"} (${deployment.status ?? "unknown status"})`);
+    } else {
+      console.log(`  would deploy a ${zipBytes.length}-byte zip`);
+    }
 
-        const form = new FormData();
-        form.append("zip", new Blob([await readFile(zipPath)]), "function.zip");
-        form.append("runtime", "nodejs24");
-        form.append("environment", JSON.stringify(functionEnv));
+    // Triggers. The function-deploy API does not create these; without them the scheduled and
+    // /reconcile paths never fire.
+    console.log(`  triggers: ${template.triggers?.length ?? 0}`);
+    for (const trigger of template.triggers ?? []) {
+      const name = `${functionSlug}-${trigger.functionPath.replace(/^\//, "") || "root"}`;
+      // Secret on the query string is how the handler authenticates the caller.
+      const functionPath = `${trigger.functionPath}?secret=${triggerSecret}`;
 
-        const deployment = await api(
-          "POST",
-          `/projects/${env["NEON_PROJECT_ID"]}/branches/${branchId}/functions/${functionSlug}/deployments`,
-          { formData: form },
-        );
-        console.log(`  deployed: ${deployment.id ?? "ok"} (${deployment.status ?? "unknown status"})`);
-      }
+      const body =
+        trigger.type === "schedule"
+          ? { type: "schedule", function_slug: functionSlug, name, function_path: functionPath,
+              schedule: { cron: trigger.cron }, enabled: true }
+          : { type: "storage_object_created", function_slug: functionSlug, name,
+              function_path: functionPath,
+              storage_object_created: {
+                bucket_name: env[trigger.bucketEnv] ?? "",
+                ...(trigger.prefixEnv && env[trigger.prefixEnv] ? { prefix: env[trigger.prefixEnv] } : {}),
+              },
+              enabled: true };
 
-      // 5. Triggers.
-      console.log(`  triggers: ${entry.triggers.length}`);
-      for (const trigger of entry.triggers) {
-        const name = `${functionSlug}-${trigger.functionPath.replace(/^\//, "") || "root"}`;
-        // Secret on the query string is how the handler authenticates the caller.
-        const functionPath = `${trigger.functionPath}?secret=${triggerSecret}`;
-
-        const body =
-          trigger.type === "schedule"
-            ? { type: "schedule", function_slug: functionSlug, name, function_path: functionPath,
-                schedule: { cron: trigger.cron }, enabled: true }
-            : { type: "storage_object_created", function_slug: functionSlug, name,
-                function_path: functionPath,
-                storage_object_created: {
-                  bucket_name: env[trigger.bucketEnv] ?? "",
-                  ...(trigger.prefixEnv && env[trigger.prefixEnv]
-                    ? { prefix: env[trigger.prefixEnv] }
-                    : {}),
-                },
-                enabled: true };
-
-        if (trigger.type === "storage_object_created" && !body.storage_object_created.bucket_name) {
-          console.log(`    skipped ${trigger.type} — ${trigger.bucketEnv} is not set`);
-          continue;
-        }
-
-        console.log(
-          `    ${trigger.type} → ${trigger.functionPath}` +
-            (trigger.cron ? ` (${trigger.cron} UTC)` : ` (${body.storage_object_created?.bucket_name})`),
-        );
-
-        if (!dryRun) {
-          await api("POST", `/projects/${env["NEON_PROJECT_ID"]}/branches/${branchId}/triggers`, { body });
-        }
-      }
-
-      // 6. Record the version, so upgrades have something to compare against.
-      if (!dryRun) {
-        await withPool(async (pool) => {
-          await pool.query(
-            `INSERT INTO blocks_core.installations
-               (block, version, artifact_sha256, function_slug, config)
-             VALUES ($1, $2, $3, $4, $5::jsonb)
-             ON CONFLICT (block) DO UPDATE
-               SET version = EXCLUDED.version,
-                   artifact_sha256 = EXCLUDED.artifact_sha256,
-                   function_slug = EXCLUDED.function_slug,
-                   config = EXCLUDED.config,
-                   upgraded_at = now(),
-                   upgrade_from = NULL`,
-            [
-              entry.slug,
-              entry.version,
-              entry.artifact.sha256,
-              functionSlug,
-              // Secrets excluded deliberately: this row is for support and upgrades, and a
-              // credential in it would outlive the reason to have it.
-              JSON.stringify(
-                Object.fromEntries(
-                  Object.entries(functionEnv).filter(
-                    ([k]) => !entry.config.find((c) => c.name === k)?.secret,
-                  ),
-                ),
-              ),
-            ],
-          ).catch((err) => {
-            // The block is deployed and working at this point; only the bookkeeping failed.
-            console.log(`    note: could not record installation (${err.message.split("\n")[0]})`);
-            console.log("    install the queue block first — it creates blocks_core.installations");
-          });
-        });
+      if (trigger.type === "storage_object_created" && !body.storage_object_created.bucket_name) {
+        console.log(`    skipped ${trigger.type} — ${trigger.bucketEnv} is not set`);
+        continue;
       }
 
       console.log(
-        dryRun
-          ? "\nDry run complete. Re-run without --dry-run to apply."
-          : `\n${entry.slug} installed. Check health:\n` +
-              `  curl https://<function-url>/health`,
+        `    ${trigger.type} → ${trigger.functionPath}` +
+          (trigger.cron ? ` (${trigger.cron} UTC)` : ` (${body.storage_object_created?.bucket_name})`),
       );
-      if (!dryRun && !env["NEON_BLOCKS_TRIGGER_SECRET"]) {
-        console.log(
-          `\nGenerated a trigger secret for this install. To reproduce it, set:\n` +
-            `  NEON_BLOCKS_TRIGGER_SECRET=${triggerSecret}`,
-        );
+
+      if (!dryRun) {
+        await api("POST", `/projects/${env["NEON_PROJECT_ID"]}/branches/${branchId}/triggers`, { body });
       }
-    } finally {
-      await rm(dir, { recursive: true, force: true });
+    }
+
+    // Record the install, for upgrades. Best-effort: blocks_core.installations is created by the
+    // handler's first migration, so this may not exist yet on a brand-new branch.
+    if (!dryRun) {
+      const version = await repoVersion();
+      const sha256 = createHash("sha256").update(zipBytes).digest("hex");
+      await withPool(async (pool) => {
+        await pool.query(
+          `INSERT INTO blocks_core.installations
+             (block, version, artifact_sha256, function_slug, config)
+           VALUES ($1, $2, $3, $4, $5::jsonb)
+           ON CONFLICT (block) DO UPDATE
+             SET version = EXCLUDED.version, artifact_sha256 = EXCLUDED.artifact_sha256,
+                 function_slug = EXCLUDED.function_slug, config = EXCLUDED.config,
+                 upgraded_at = now(), upgrade_from = NULL`,
+          [
+            target, version, sha256, functionSlug,
+            // Secrets excluded deliberately: this row is for support and upgrades.
+            JSON.stringify(
+              Object.fromEntries(
+                Object.entries(functionEnv).filter(
+                  ([k]) => !template.environment.find((c) => c.name === k)?.secret,
+                ),
+              ),
+            ),
+          ],
+        ).catch((err) => {
+          console.log(`    note: could not record installation (${err.message.split("\n")[0]})`);
+          console.log("    the block is deployed; blocks_core.installations is created on first request");
+        });
+      });
+    }
+
+    console.log(
+      dryRun
+        ? "\nDry run complete. Re-run without --dry-run to apply."
+        : `\n${target} installed. It applies its own migrations on first request. Check health:\n` +
+            `  curl https://<function-url>/health`,
+    );
+    if (!dryRun && !env["NEON_BLOCKS_TRIGGER_SECRET"]) {
+      console.log(
+        `\nGenerated a trigger secret for this install. To reproduce it, set:\n` +
+          `  NEON_BLOCKS_TRIGGER_SECRET=${triggerSecret}`,
+      );
     }
     break;
   }
@@ -396,7 +346,7 @@ switch (command) {
         .catch(() => ({ rows: null }));
 
       if (!rows) {
-        console.log("No installations recorded. Install the queue block first.");
+        console.log("No installations recorded. Install a block first.");
         return;
       }
       if (rows.length === 0) {
@@ -404,12 +354,11 @@ switch (command) {
         return;
       }
 
-      const catalog = await loadCatalog();
-      console.log(`\n${rows.length} block(s) installed (catalog is at ${catalog.release})\n`);
+      const version = await repoVersion();
+      console.log(`\n${rows.length} block(s) installed (registry is at ${version})\n`);
 
       for (const row of rows) {
-        const available = catalog.blocks.find((b) => b.slug === row.block)?.version;
-        const upgrade = available && available !== row.version ? ` → ${available} available` : "";
+        const upgrade = row.version && row.version !== version ? ` → ${version} available` : "";
         const interrupted = row.interrupted_upgrade_from
           ? `  INTERRUPTED UPGRADE from ${row.interrupted_upgrade_from}`
           : "";
@@ -428,9 +377,8 @@ switch (command) {
       process.exit(1);
     }
 
-    const catalog = await loadCatalog();
-    const entry = catalog.blocks.find((b) => b.slug === target);
-    if (!entry) {
+    const registry = await loadRegistry();
+    if (!registry.templates.some((t) => t.id === target)) {
       console.error(`Unknown block "${target}"`);
       process.exit(1);
     }
@@ -443,33 +391,29 @@ switch (command) {
       compliance: "the hash-chained audit log",
       vision: "alt text you may be serving on live pages",
     };
-    if (destructive[entry.slug]) {
-      console.log(`\nWARNING: uninstalling ${entry.slug} destroys ${destructive[entry.slug]}.`);
+    if (destructive[target]) {
+      console.log(`\nWARNING: uninstalling ${target} destroys ${destructive[target]}.`);
       console.log("Export it first if that matters. Continuing in 5 seconds; Ctrl-C to abort.\n");
       await new Promise((r) => setTimeout(r, 5_000));
     }
 
-    const dir = await stageArtifact(entry);
-    try {
-      await withPool(async (pool) => {
-        const { loadMigrations, rollbackMigrations } = await import(
-          path.join(root, "packages/migrate/dist/index.js")
-        );
-        const migrations = await loadMigrations(path.join(dir, "migrations"));
-        const rolled = await rollbackMigrations(pool, entry.slug, migrations, migrations.length);
-        console.log(`rolled back ${rolled.length} migration(s) for ${entry.slug}`);
-
-        await pool
-          .query(`DELETE FROM blocks_core.installations WHERE block = $1`, [entry.slug])
-          .catch(() => {});
-      });
-      console.log(
-        `\nSchema removed. The deployed function still exists — remove it in the console, or:\n` +
-          `  DELETE /projects/$NEON_PROJECT_ID/branches/<branch>/functions/${functionSlugFor(entry.slug)}`,
+    // Roll back the block's migrations, read from the registry's per-template migrations folder.
+    await withPool(async (pool) => {
+      const { loadMigrations, rollbackMigrations } = await import(
+        path.join(root, "packages/migrate/dist/index.js")
       );
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+      const migrations = await loadMigrations(path.join(REGISTRY_DIR, target, "migrations"));
+      const rolled = await rollbackMigrations(pool, target, migrations, migrations.length);
+      console.log(`rolled back ${rolled.length} migration(s) for ${target}`);
+
+      await pool
+        .query(`DELETE FROM blocks_core.installations WHERE block = $1`, [target])
+        .catch(() => {});
+    });
+    console.log(
+      `\nSchema removed. The deployed function still exists — remove it in the console, or:\n` +
+        `  DELETE /projects/$NEON_PROJECT_ID/branches/<branch>/functions/${functionSlugFor(target)}`,
+    );
     break;
   }
 

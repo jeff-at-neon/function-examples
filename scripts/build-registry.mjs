@@ -6,7 +6,7 @@
  * self-describing template.json, the bundled handler (index.js — the operations' shared source),
  * the README, and the migrations. Conforms to schemas/{registry,template}.schema.json.
  *
- * Like build-release.mjs, artifacts are public and inert: bundled code and metadata, no credentials
+ * Artifacts are public and inert: bundled code and metadata, no credentials
  * of any kind. Regenerated from each block's block.json, so it never drifts from source.
  *
  *   node scripts/build-registry.mjs [--out dist-registry]

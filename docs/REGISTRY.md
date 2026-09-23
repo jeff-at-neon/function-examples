@@ -5,9 +5,9 @@ A shadcn-style, self-describing catalog for the function blocks. Two consumers:
 - a **CLI** that installs a block from a registry entry, and
 - a **GUI** (the Neon console) that reads the registry to render a browsable catalog.
 
-The format supersedes the single inlined `catalog.json` from `scripts/build-release.mjs` as the
-catalog **index** (the deploy tarballs `build-release.mjs` produces stay). It is defined by two JSON
-Schemas, vendored in this repo and the single source of truth:
+This is the single, canonical catalog surface — it replaced the earlier `catalog.json` + tarball
+pipeline (`build-release.mjs`), which has been removed. It is defined by two JSON Schemas, vendored
+in this repo and the single source of truth:
 
 - [`schemas/registry.schema.json`](../schemas/registry.schema.json) — the discovery index.
 - [`schemas/template.schema.json`](../schemas/template.schema.json) — one self-describing template per block.

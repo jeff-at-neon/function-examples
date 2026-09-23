@@ -52,18 +52,10 @@ jobs:
       - name: Unit tests
         run: npx vitest run
 
-      - name: Build artifacts
-        run: node scripts/build-release.mjs --version "${{ steps.version.outputs.value }}"
-
-      - name: Verify artifacts are self-contained and credential-free
-        # The two properties the whole model depends on: an artifact must deploy without the monorepo,
-        # and must be safe to serve unauthenticated. Checked here rather than trusted, because a
-        # regression in either is invisible until someone deploys.
-        run: node scripts/verify-release.mjs
-
       - name: Build and validate the function registry
-        # The canonical catalog surface (registry.json + per-template template.json) the console GUI
-        # and deploy CLI read. Served as a static tree; retained as a build artifact here.
+        # The canonical catalog surface (registry.json + per-template template.json + <id>.zip) the
+        # console GUI and deploy CLI read. The Pages workflow serves it; this retains it as a build
+        # artifact and attaches the zips to the GitHub release.
         run: |
           node scripts/build-registry.mjs
           node scripts/validate-registry.mjs
@@ -71,13 +63,11 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: catalog-${{ steps.version.outputs.value }}
-          path: |
-            dist-release/
-            dist-registry/
+          name: registry-${{ steps.version.outputs.value }}
+          path: dist-registry/
           retention-days: 90
 
-      # Tag pushes publish. The catalog.json and tarballs become the URLs the console fetches.
+      # Tag pushes attach the registry index and the deployable zips to the GitHub release.
       - name: Publish release
         if: github.event_name == 'push'
         env:
@@ -85,7 +75,7 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --title "Neon Blocks ${{ steps.version.outputs.value }}" \
-            --notes "Catalog release. \`catalog.json\` is the console index; each block ships as a self-contained tarball containing bundled code, migrations, manifest, and README.
+            --notes "Function registry release. \`registry.json\` is the console index; each block ships as a self-contained \`<id>.zip\` (index.mjs at the root, migrations bundled) plus its template.json.
 
           Artifacts contain no credentials and can be served unauthenticated." \
-            dist-release/*
+            dist-registry/registry.json dist-registry/*.zip
