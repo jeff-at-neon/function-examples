@@ -47,28 +47,40 @@ export class TriggerAuthError extends Error {
 /**
  * Parse a trigger POST body.
  *
- * Two delivery shapes, and they differ in whether they carry a discriminator:
+ * The delivery envelope (confirmed against a live Neon trigger) is:
  *
- * - **Storage** events carry `{ type: "storage_object_created", data: { bucket_name, object_key } }`.
- *   We extract only those documented fields — third-party write-ups claim richer ones (size,
- *   content_type, etag) that are NOT documented, so blocks HEAD the object instead. Trusting an
- *   undocumented field that silently disappears is a worse failure than one extra request.
- * - **Schedule** ("tick") deliveries carry **no `type`** — the platform just invokes the route on
- *   its cron, with no event envelope (the body may be empty or `{}`). So an absent `type` IS a
- *   schedule; we do not require one. Only a present-but-unrecognized `type` is an error.
+ *   { version, invocation_id, trigger: { type, id, name }, data: { … } }
+ *
+ * The discriminator lives at **`trigger.type`** — NOT top level. A storage delivery carries
+ *   `trigger.type: "storage_object_created"` with `data: { bucket_name, object_key }`; a schedule
+ * delivery carries `trigger.type: "schedule"`. We read `trigger.type` first and fall back to a
+ * top-level `type` for robustness. For storage we extract only the documented `data` fields —
+ * blocks HEAD the object for size/content-type rather than trust undocumented extras. A missing
+ * discriminator is treated as a schedule (a bare cron tick may arrive with an empty body); only a
+ * present-but-unrecognized type is an error.
  */
 export function parseTriggerEvent(body: unknown, headers?: Headers): TriggerEvent {
   const envelope = (typeof body === "object" && body !== null ? body : {}) as {
     type?: unknown;
+    trigger?: unknown;
     data?: unknown;
     scheduled_at?: unknown;
+    invocation_id?: unknown;
   };
   const data = (typeof envelope.data === "object" && envelope.data !== null
     ? envelope.data
     : {}) as Record<string, unknown>;
-  const invocationId = headers?.get(TRIGGER_ID_HEADER) ?? undefined;
+  const trigger = (typeof envelope.trigger === "object" && envelope.trigger !== null
+    ? envelope.trigger
+    : {}) as { type?: unknown };
+  // Discriminator is nested under `trigger.type`; accept a top-level `type` as a fallback.
+  const type = trigger.type ?? envelope.type;
+  // The header is the trusted invocation id; the body carries a copy as a fallback.
+  const invocationId =
+    headers?.get(TRIGGER_ID_HEADER) ??
+    (typeof envelope.invocation_id === "string" ? envelope.invocation_id : undefined);
 
-  if (envelope.type === "storage_object_created") {
+  if (type === "storage_object_created") {
     const bucketName = data["bucket_name"];
     const objectKey = data["object_key"];
     if (typeof bucketName !== "string" || bucketName === "") {
@@ -85,9 +97,9 @@ export function parseTriggerEvent(body: unknown, headers?: Headers): TriggerEven
     };
   }
 
-  // Absent/empty type (the scheduled-tick contract) or an explicit "schedule" → a schedule event.
-  // scheduled_at is optional: use it wherever the platform provides it, otherwise fall back to now.
-  if (envelope.type === undefined || envelope.type === null || envelope.type === "schedule") {
+  // An explicit "schedule", or a missing discriminator (a bare cron tick may arrive with an empty
+  // body), is a schedule. scheduled_at is optional: use it if provided, else fall back to now.
+  if (type === undefined || type === null || type === "schedule") {
     const scheduledAt =
       typeof data["scheduled_at"] === "string"
         ? (data["scheduled_at"] as string)
@@ -98,7 +110,7 @@ export function parseTriggerEvent(body: unknown, headers?: Headers): TriggerEven
   }
 
   throw new TriggerPayloadError(
-    `Unsupported trigger type ${JSON.stringify(envelope.type)}. ` +
+    `Unsupported trigger type ${JSON.stringify(type)}. ` +
       `Known types: schedule, storage_object_created.`,
   );
 }

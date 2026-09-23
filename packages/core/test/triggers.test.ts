@@ -36,7 +36,35 @@ describe("parseTriggerEvent — schedule (tick) deliveries carry no type", () =>
   });
 });
 
-describe("parseTriggerEvent — storage_object_created", () => {
+describe("parseTriggerEvent — real Neon envelope (trigger.type nested)", () => {
+  // The live delivery shape: { version, invocation_id, trigger: { type, id, name }, data }.
+  it("parses a storage delivery with the discriminator under trigger.type", () => {
+    const event = parseTriggerEvent({
+      version: 1,
+      invocation_id: "inv-123",
+      trigger: { type: "storage_object_created", id: "trigger-abc", name: "vision-analyze" },
+      data: { bucket_name: "images", object_key: "uploads/toucan.jpg" },
+    });
+    expect(event).toMatchObject({
+      type: "storage_object_created",
+      bucketName: "images",
+      objectKey: "uploads/toucan.jpg",
+      invocationId: "inv-123",
+    });
+  });
+
+  it("parses a schedule delivery with trigger.type schedule", () => {
+    expect(
+      parseTriggerEvent({ version: 1, trigger: { type: "schedule", id: "t", name: "sweep" }, data: {} }).type,
+    ).toBe("schedule");
+  });
+
+  it("rejects an unrecognized trigger.type", () => {
+    expect(() => parseTriggerEvent({ trigger: { type: "webhook" } })).toThrow(/Unsupported trigger type/);
+  });
+});
+
+describe("parseTriggerEvent — storage_object_created (top-level type fallback)", () => {
   it("extracts bucket_name and object_key", () => {
     const event = parseTriggerEvent({
       type: "storage_object_created",
