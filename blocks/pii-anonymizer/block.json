@@ -61,5 +61,35 @@
       "required": false
     }
   ],
-  "triggers": []
+  "triggers": [],
+  "operations": [
+    {
+      "id": "rules",
+      "title": "POST /rules",
+      "description": "Declare a masking rule for a column.",
+      "route": "/rules",
+      "recommended": true
+    },
+    {
+      "id": "run",
+      "title": "POST /run",
+      "description": "Mask this branch. Refuses unless the branch name matches the allow pattern.",
+      "route": "/run",
+      "recommended": true
+    },
+    {
+      "id": "runs",
+      "title": "GET /runs",
+      "description": "Masking history for this branch.",
+      "route": "/runs",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
+  ]
 }

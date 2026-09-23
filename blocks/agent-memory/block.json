@@ -68,5 +68,42 @@
       "functionPath": "/compact",
       "description": "Compact sessions that have crossed the token threshold. Scheduled rather than inline so a user-facing turn never waits on a summarization call."
     }
+  ],
+  "operations": [
+    {
+      "id": "sessions",
+      "title": "POST /sessions",
+      "description": "Open a session.",
+      "route": "/sessions",
+      "recommended": true
+    },
+    {
+      "id": "turns",
+      "title": "POST /turns",
+      "description": "Append a turn and update the running token total.",
+      "route": "/turns",
+      "recommended": true
+    },
+    {
+      "id": "context",
+      "title": "GET /context",
+      "description": "Assemble context: summaries, retrieved turns, recent turns.",
+      "route": "/context",
+      "recommended": true
+    },
+    {
+      "id": "compact",
+      "title": "POST /compact",
+      "description": "Cron. Summarize the oldest turns of oversized sessions.",
+      "route": "/compact",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

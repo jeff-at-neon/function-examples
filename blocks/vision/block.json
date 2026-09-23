@@ -6,25 +6,134 @@
   "schema": "blocks_vision",
   "billing": "meter",
   "depth": "implemented",
-  "capabilities": ["postgres", "object_storage", "ai_gateway"],
+  "capabilities": [
+    "postgres",
+    "object_storage",
+    "ai_gateway"
+  ],
   "dependsOn": [],
   "env": [
-    { "name": "DATABASE_URL", "description": "Branch connection string. Injected automatically by Neon.", "required": true, "injected": true },
-    { "name": "NEON_STORAGE_ENDPOINT", "description": "Object Storage endpoint. Injected automatically by Neon.", "required": true, "injected": true },
-    { "name": "NEON_STORAGE_ACCESS_KEY_ID", "description": "Object Storage access key. Injected automatically by Neon.", "required": true, "injected": true },
-    { "name": "NEON_STORAGE_SECRET_ACCESS_KEY", "description": "Object Storage secret key. Injected automatically by Neon.", "required": true, "injected": true },
-    { "name": "NEON_AI_GATEWAY_API_KEY", "description": "AI Gateway credential for the vision model. Injected automatically by Neon.", "required": true, "injected": true },
-    { "name": "VISION_BUCKET", "description": "Bucket to watch for images.", "required": true, "example": "uploads" },
-    { "name": "VISION_PREFIX", "description": "Watched key prefix. Non-images under it are recorded as skipped, since storage triggers have no suffix filter.", "required": false, "default": "uploads/" },
-    { "name": "VISION_MODEL", "description": "Vision-capable model. Must accept image inputs.", "required": false, "default": "gpt-4o-mini" },
-    { "name": "VISION_OUTPUTS", "description": "Comma-separated outputs: tags, caption, altText, ocr, colors. All are requested in one call, because image tokens dominate the cost.", "required": false, "default": "tags,caption,altText,ocr" },
-    { "name": "VISION_MAX_TAGS", "description": "Maximum tags per image.", "required": false, "default": "12" },
-    { "name": "VISION_MAX_BYTES", "description": "Largest image to analyse.", "required": false, "default": "20971520" },
-    { "name": "VISION_URL_TTL_SECONDS", "description": "Lifetime of the presigned URL handed to the model provider. Short, because it leaves your infrastructure.", "required": false, "default": "300" },
-    { "name": "NEON_BLOCKS_TRIGGER_SECRET", "description": "Shared secret authenticating trigger delivery. Strongly recommended: each analysis costs a model call, so a forged event costs money.", "required": false }
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ENDPOINT",
+      "description": "Object Storage endpoint. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_ACCESS_KEY_ID",
+      "description": "Object Storage access key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_STORAGE_SECRET_ACCESS_KEY",
+      "description": "Object Storage secret key. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_AI_GATEWAY_API_KEY",
+      "description": "AI Gateway credential for the vision model. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "VISION_BUCKET",
+      "description": "Bucket to watch for images.",
+      "required": true,
+      "example": "uploads"
+    },
+    {
+      "name": "VISION_PREFIX",
+      "description": "Watched key prefix. Non-images under it are recorded as skipped, since storage triggers have no suffix filter.",
+      "required": false,
+      "default": "uploads/"
+    },
+    {
+      "name": "VISION_MODEL",
+      "description": "Vision-capable model. Must accept image inputs.",
+      "required": false,
+      "default": "gpt-4o-mini"
+    },
+    {
+      "name": "VISION_OUTPUTS",
+      "description": "Comma-separated outputs: tags, caption, altText, ocr, colors. All are requested in one call, because image tokens dominate the cost.",
+      "required": false,
+      "default": "tags,caption,altText,ocr"
+    },
+    {
+      "name": "VISION_MAX_TAGS",
+      "description": "Maximum tags per image.",
+      "required": false,
+      "default": "12"
+    },
+    {
+      "name": "VISION_MAX_BYTES",
+      "description": "Largest image to analyse.",
+      "required": false,
+      "default": "20971520"
+    },
+    {
+      "name": "VISION_URL_TTL_SECONDS",
+      "description": "Lifetime of the presigned URL handed to the model provider. Short, because it leaves your infrastructure.",
+      "required": false,
+      "default": "300"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating trigger delivery. Strongly recommended: each analysis costs a model call, so a forged event costs money.",
+      "required": false
+    }
   ],
   "triggers": [
-    { "type": "storage_object_created", "bucketEnv": "VISION_BUCKET", "prefixEnv": "VISION_PREFIX", "functionPath": "/analyze", "description": "Analyse a newly uploaded image." },
-    { "type": "schedule", "cron": "47 * * * *", "functionPath": "/reconcile", "description": "Required by §5. Analyses images the trigger missed, bounded per run to cap model spend." }
+    {
+      "type": "storage_object_created",
+      "bucketEnv": "VISION_BUCKET",
+      "prefixEnv": "VISION_PREFIX",
+      "functionPath": "/analyze",
+      "description": "Analyse a newly uploaded image."
+    },
+    {
+      "type": "schedule",
+      "cron": "47 * * * *",
+      "functionPath": "/reconcile",
+      "description": "Required by §5. Analyses images the trigger missed, bounded per run to cap model spend."
+    }
+  ],
+  "operations": [
+    {
+      "id": "analyze",
+      "title": "POST /analyze",
+      "description": "storage trigger, or queue-driven — analyse one image",
+      "route": "/analyze",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "cron — retry failures, find images the trigger missed",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "search",
+      "title": "GET /search",
+      "description": "tag and OCR search over analysed images",
+      "route": "/search",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

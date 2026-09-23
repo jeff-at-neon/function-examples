@@ -6,18 +6,113 @@
   "schema": "blocks_webhooks_outbound",
   "billing": "meter",
   "depth": "implemented",
-  "capabilities": ["postgres", "custom_domain"],
-  "dependsOn": ["queue"],
+  "capabilities": [
+    "postgres",
+    "custom_domain"
+  ],
+  "dependsOn": [
+    "queue"
+  ],
   "env": [
-    { "name": "DATABASE_URL", "description": "Branch connection string. Injected automatically by Neon.", "required": true, "injected": true },
-    { "name": "OUTBOUND_BATCH_SIZE", "description": "Deliveries claimed per invocation.", "required": false, "default": "50" },
-    { "name": "OUTBOUND_TIMEOUT_MS", "description": "Per-request timeout. Short by design: a slow endpoint must not hold an invocation open.", "required": false, "default": "10000" },
-    { "name": "OUTBOUND_MAX_ATTEMPTS", "description": "Attempts before a delivery is dead-lettered. 12 with exponential backoff spans roughly a day.", "required": false, "default": "12" },
-    { "name": "OUTBOUND_BUDGET_MS", "description": "Stop starting new deliveries after this long, so the invocation ends cleanly.", "required": false, "default": "45000" },
-    { "name": "OUTBOUND_MAX_PAYLOAD_BYTES", "description": "Largest event payload accepted for fan-out.", "required": false, "default": "1048576" },
-    { "name": "NEON_BLOCKS_TRIGGER_SECRET", "description": "Shared secret authenticating the /send cron trigger.", "required": false }
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "OUTBOUND_BATCH_SIZE",
+      "description": "Deliveries claimed per invocation.",
+      "required": false,
+      "default": "50"
+    },
+    {
+      "name": "OUTBOUND_TIMEOUT_MS",
+      "description": "Per-request timeout. Short by design: a slow endpoint must not hold an invocation open.",
+      "required": false,
+      "default": "10000"
+    },
+    {
+      "name": "OUTBOUND_MAX_ATTEMPTS",
+      "description": "Attempts before a delivery is dead-lettered. 12 with exponential backoff spans roughly a day.",
+      "required": false,
+      "default": "12"
+    },
+    {
+      "name": "OUTBOUND_BUDGET_MS",
+      "description": "Stop starting new deliveries after this long, so the invocation ends cleanly.",
+      "required": false,
+      "default": "45000"
+    },
+    {
+      "name": "OUTBOUND_MAX_PAYLOAD_BYTES",
+      "description": "Largest event payload accepted for fan-out.",
+      "required": false,
+      "default": "1048576"
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret authenticating the /send cron trigger.",
+      "required": false
+    }
   ],
   "triggers": [
-    { "type": "schedule", "cron": "* * * * *", "functionPath": "/send", "description": "Deliver due attempts. Every minute is the practical floor for cron-driven delivery latency." }
+    {
+      "type": "schedule",
+      "cron": "* * * * *",
+      "functionPath": "/send",
+      "description": "Deliver due attempts. Every minute is the practical floor for cron-driven delivery latency."
+    }
+  ],
+  "operations": [
+    {
+      "id": "endpoints",
+      "title": "POST /endpoints",
+      "description": "register an endpoint",
+      "route": "/endpoints",
+      "recommended": true
+    },
+    {
+      "id": "endpoints-id",
+      "title": "DELETE /endpoints/:id",
+      "description": "remove one",
+      "route": "/endpoints/:id",
+      "recommended": true
+    },
+    {
+      "id": "endpoints-id-enable",
+      "title": "POST /endpoints/:id/enable",
+      "description": "clear a disabled state after a fix",
+      "route": "/endpoints/:id/enable",
+      "recommended": true
+    },
+    {
+      "id": "events",
+      "title": "POST /events",
+      "description": "fan an event out to matching endpoints",
+      "route": "/events",
+      "recommended": true
+    },
+    {
+      "id": "send",
+      "title": "POST /send",
+      "description": "cron — deliver due attempts",
+      "route": "/send",
+      "recommended": true
+    },
+    {
+      "id": "deliveries",
+      "title": "GET /deliveries",
+      "description": "delivery log for a subscriber",
+      "route": "/deliveries",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

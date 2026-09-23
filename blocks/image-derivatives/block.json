@@ -97,5 +97,35 @@
       "functionPath": "/reconcile",
       "description": "Required by §5. Detects derivatives whose source is gone -- there are no storage delete events, so orphans are otherwise permanent and you keep paying to store them."
     }
+  ],
+  "operations": [
+    {
+      "id": "i-key",
+      "title": "GET /i/:key",
+      "description": "Serve a derivative, generating on a cache miss.",
+      "route": "/i/:key",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "Cron. Mark derivatives whose source is gone.",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "derivatives",
+      "title": "GET /derivatives",
+      "description": "Derivatives for a source key.",
+      "route": "/derivatives",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

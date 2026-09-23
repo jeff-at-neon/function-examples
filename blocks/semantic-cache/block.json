@@ -62,5 +62,42 @@
       "functionPath": "/sweep",
       "description": "Expire entries past TTL and report hit rate. Without it the table grows without bound."
     }
+  ],
+  "operations": [
+    {
+      "id": "lookup",
+      "title": "POST /lookup",
+      "description": "Find a cached response for a prompt.",
+      "route": "/lookup",
+      "recommended": true
+    },
+    {
+      "id": "store",
+      "title": "POST /store",
+      "description": "Cache a response.",
+      "route": "/store",
+      "recommended": true
+    },
+    {
+      "id": "sweep",
+      "title": "POST /sweep",
+      "description": "Cron. Expire entries and report hit rate.",
+      "route": "/sweep",
+      "recommended": true
+    },
+    {
+      "id": "stats",
+      "title": "GET /stats",
+      "description": "Hit rate and tokens saved by namespace.",
+      "route": "/stats",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

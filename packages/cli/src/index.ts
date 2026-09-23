@@ -12,7 +12,7 @@ import { loadManifest, ManifestError, type BlockManifest } from "./manifest.js";
 import { loadMigrations } from "@neon-blocks/migrate";
 
 export { loadManifest, parseManifest, ManifestError } from "./manifest.js";
-export type { BlockManifest, TriggerSpec, EnvVarSpec, Capability } from "./manifest.js";
+export type { BlockManifest, TriggerSpec, EnvVarSpec, OperationSpec, Capability } from "./manifest.js";
 
 export interface DiscoveredBlock {
   manifest: BlockManifest;

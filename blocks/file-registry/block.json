@@ -6,7 +6,10 @@
   "schema": "blocks_file_registry",
   "billing": "free",
   "depth": "implemented",
-  "capabilities": ["postgres", "object_storage"],
+  "capabilities": [
+    "postgres",
+    "object_storage"
+  ],
   "dependsOn": [],
   "env": [
     {
@@ -82,6 +85,50 @@
       "cron": "41 * * * *",
       "functionPath": "/reconcile",
       "description": "Required by §5. Detects uploads the trigger missed, marks deletions (there are no delete events), and expires abandoned uploads."
+    }
+  ],
+  "operations": [
+    {
+      "id": "uploads",
+      "title": "POST /uploads",
+      "description": "issue a presigned PUT and a pending row",
+      "route": "/uploads",
+      "recommended": true
+    },
+    {
+      "id": "finalize",
+      "title": "POST /finalize",
+      "description": "storage trigger — flip pending to ready with observed metadata",
+      "route": "/finalize",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "cron — missed finalizes, deletions, abandoned uploads",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "files",
+      "title": "GET /files",
+      "description": "list a tenant's files",
+      "route": "/files",
+      "recommended": true
+    },
+    {
+      "id": "files-key",
+      "title": "DELETE /files/:key",
+      "description": "remove a file",
+      "route": "/files/:key",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
     }
   ]
 }

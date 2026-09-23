@@ -94,5 +94,35 @@
       "functionPath": "/reconcile",
       "description": "Required by §5. Finds uploads the trigger missed and resets imports stuck mid-run."
     }
+  ],
+  "operations": [
+    {
+      "id": "import",
+      "title": "POST /import",
+      "description": "Storage trigger. Import one spreadsheet.",
+      "route": "/import",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "Cron. Missed uploads and stuck imports.",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "imports-id",
+      "title": "GET /imports/:id",
+      "description": "Import status plus its row errors.",
+      "route": "/imports/:id",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

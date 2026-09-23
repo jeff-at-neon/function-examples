@@ -95,5 +95,49 @@
       "functionPath": "/reconcile",
       "description": "Required by §5. Retries failures and picks up documents the trigger never delivered."
     }
+  ],
+  "operations": [
+    {
+      "id": "schemas",
+      "title": "POST /schemas",
+      "description": "Declare what to extract for a document type.",
+      "route": "/schemas",
+      "recommended": true
+    },
+    {
+      "id": "extract",
+      "title": "POST /extract",
+      "description": "Storage trigger. Extract one document.",
+      "route": "/extract",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "Cron. Retries and missed deliveries.",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "review",
+      "title": "GET /review",
+      "description": "Fields awaiting review, least confident first.",
+      "route": "/review",
+      "recommended": true
+    },
+    {
+      "id": "review-id",
+      "title": "POST /review/:id",
+      "description": "Submit a correction.",
+      "route": "/review/:id",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

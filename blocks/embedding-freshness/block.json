@@ -59,5 +59,35 @@
       "functionPath": "/scan",
       "description": "Detect rows whose embedded text changed and queue re-embeds. Five minutes is a deliberate compromise: row-event triggers would make this near-instant."
     }
+  ],
+  "operations": [
+    {
+      "id": "sources",
+      "title": "POST /sources",
+      "description": "Register a table whose text should stay embedded.",
+      "route": "/sources",
+      "recommended": true
+    },
+    {
+      "id": "scan",
+      "title": "POST /scan",
+      "description": "Cron. Detect changed rows and queue re-embeds.",
+      "route": "/scan",
+      "recommended": true
+    },
+    {
+      "id": "pending",
+      "title": "GET /pending",
+      "description": "Rows currently known to be stale.",
+      "route": "/pending",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

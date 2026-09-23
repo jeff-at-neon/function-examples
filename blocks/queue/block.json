@@ -6,7 +6,9 @@
   "schema": "blocks_queue",
   "billing": "free",
   "depth": "implemented",
-  "capabilities": ["postgres"],
+  "capabilities": [
+    "postgres"
+  ],
   "dependsOn": [],
   "env": [
     {
@@ -70,6 +72,50 @@
       "cron": "17 3 * * *",
       "functionPath": "/sweep",
       "description": "Reclaim expired leases, purge old succeeded jobs, report DLQ depth. Off-peak and off the hour."
+    }
+  ],
+  "operations": [
+    {
+      "id": "work",
+      "title": "POST /work",
+      "description": "cron, every minute — drain the outbox, then run due jobs",
+      "route": "/work",
+      "recommended": true
+    },
+    {
+      "id": "sweep",
+      "title": "POST /sweep",
+      "description": "cron, daily — reclaim leases, purge, report DLQ depth",
+      "route": "/sweep",
+      "recommended": true
+    },
+    {
+      "id": "enqueue",
+      "title": "POST /enqueue",
+      "description": "HTTP — enqueue a job from application code",
+      "route": "/enqueue",
+      "recommended": true
+    },
+    {
+      "id": "publish",
+      "title": "POST /publish",
+      "description": "HTTP — publish an event to the outbox",
+      "route": "/publish",
+      "recommended": true
+    },
+    {
+      "id": "replay",
+      "title": "POST /replay",
+      "description": "HTTP — move dead jobs back to pending after a fix",
+      "route": "/replay",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
     }
   ]
 }

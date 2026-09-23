@@ -55,5 +55,42 @@
       "functionPath": "/sweep",
       "description": "Prune expired rate windows and idempotency records. Without it both tables grow without bound."
     }
+  ],
+  "operations": [
+    {
+      "id": "keys",
+      "title": "POST /keys",
+      "description": "Create a key. Returns the plaintext exactly once.",
+      "route": "/keys",
+      "recommended": true
+    },
+    {
+      "id": "keys-id",
+      "title": "DELETE /keys/:id",
+      "description": "Revoke a key.",
+      "route": "/keys/:id",
+      "recommended": true
+    },
+    {
+      "id": "verify",
+      "title": "POST /verify",
+      "description": "Verify a key and consume rate budget.",
+      "route": "/verify",
+      "recommended": true
+    },
+    {
+      "id": "sweep",
+      "title": "POST /sweep",
+      "description": "Cron. Prune expired windows and idempotency records.",
+      "route": "/sweep",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

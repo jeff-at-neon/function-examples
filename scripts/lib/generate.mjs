@@ -65,6 +65,16 @@ const TRIGGER_SECRET = {
 };
 
 
+/** Derive a stable kebab-case operation id from a route path: "/imports/:id" -> "imports-id". */
+function operationId(routePath) {
+  const id = routePath
+    .replace(/:/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return id === "" ? "root" : id;
+}
+
 const HANDLER_TEMPLATE = (spec) => {
   const schema = `blocks_${spec.slug.replace(/-/g, "_")}`;
   const requiredEnv = spec.env.filter((e) => e.required && !e.injected).map((e) => e.name);
@@ -173,6 +183,26 @@ async function generate(spec) {
   await mkdir(path.join(dir, "src"), { recursive: true });
   await mkdir(path.join(dir, "migrations"), { recursive: true });
 
+  // Operations: each declared route becomes a selectable registry operation. /health is added by
+  // the handler template, so it is appended here (not recommended — it is infrastructure, not a
+  // feature to opt into).
+  const operations = [
+    ...spec.routes.map((r) => ({
+      id: operationId(r.path),
+      title: `${r.method} ${r.path}`,
+      description: r.purpose,
+      route: r.path,
+      recommended: true,
+    })),
+    {
+      id: "health",
+      title: "GET /health",
+      description: "Liveness and readiness, backed by the block's v_status view.",
+      route: "/health",
+      recommended: false,
+    },
+  ];
+
   // Manifest
   await writeFile(
     path.join(dir, "block.json"),
@@ -189,6 +219,7 @@ async function generate(spec) {
         dependsOn: spec.dependsOn,
         env: spec.env,
         triggers: spec.triggers,
+        operations,
       },
       null,
       2,

@@ -6,7 +6,10 @@
   "schema": "blocks_realtime",
   "billing": "free",
   "depth": "implemented",
-  "capabilities": ["postgres", "data_api"],
+  "capabilities": [
+    "postgres",
+    "data_api"
+  ],
   "dependsOn": [],
   "env": [
     {
@@ -51,6 +54,43 @@
       "cron": "*/5 * * * *",
       "functionPath": "/sweep",
       "description": "Expire stale presence records and prune the event buffer. Connections die without unsubscribing, so presence needs a TTL reaper."
+    }
+  ],
+  "operations": [
+    {
+      "id": "subscribe",
+      "title": "GET /subscribe",
+      "description": "SSE stream. ?channels=a,b&actor=user:7",
+      "route": "/subscribe",
+      "recommended": true
+    },
+    {
+      "id": "publish",
+      "title": "POST /publish",
+      "description": "publish to a channel",
+      "route": "/publish",
+      "recommended": true
+    },
+    {
+      "id": "presence",
+      "title": "GET /presence",
+      "description": "who is on a channel",
+      "route": "/presence",
+      "recommended": true
+    },
+    {
+      "id": "sweep",
+      "title": "POST /sweep",
+      "description": "cron — expire stale presence, prune the replay buffer",
+      "route": "/sweep",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
     }
   ]
 }

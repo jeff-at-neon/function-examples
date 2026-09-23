@@ -6,8 +6,15 @@
   "schema": "blocks_rag",
   "billing": "free",
   "depth": "implemented",
-  "capabilities": ["postgres", "pgvector", "object_storage", "ai_gateway"],
-  "dependsOn": ["queue"],
+  "capabilities": [
+    "postgres",
+    "pgvector",
+    "object_storage",
+    "ai_gateway"
+  ],
+  "dependsOn": [
+    "queue"
+  ],
   "env": [
     {
       "name": "DATABASE_URL",
@@ -100,6 +107,36 @@
       "cron": "23 * * * *",
       "functionPath": "/reconcile",
       "description": "Required by convention §5: storage triggers are Beta with no delivery guarantee and no delete events. Finds missed uploads and marks deleted objects."
+    }
+  ],
+  "operations": [
+    {
+      "id": "ingest",
+      "title": "POST /ingest",
+      "description": "storage trigger — ingest one uploaded object",
+      "route": "/ingest",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "cron — find missed uploads, mark deletions, requeue stuck documents",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "search",
+      "title": "POST /search",
+      "description": "HTTP — vector search over ingested chunks",
+      "route": "/search",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
     }
   ]
 }

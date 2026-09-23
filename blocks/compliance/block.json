@@ -48,5 +48,42 @@
       "functionPath": "/purge",
       "description": "Purge soft-deleted rows past retention and expired audit entries. Off-peak and off the hour."
     }
+  ],
+  "operations": [
+    {
+      "id": "subject-links",
+      "title": "POST /subject-links",
+      "description": "Declare where a data subject's rows live.",
+      "route": "/subject-links",
+      "recommended": true
+    },
+    {
+      "id": "requests",
+      "title": "POST /requests",
+      "description": "Open an export or erasure request.",
+      "route": "/requests",
+      "recommended": true
+    },
+    {
+      "id": "requests-id",
+      "title": "GET /requests/:id",
+      "description": "Request status and per-table detail.",
+      "route": "/requests/:id",
+      "recommended": true
+    },
+    {
+      "id": "purge",
+      "title": "POST /purge",
+      "description": "Cron. TTL purge of soft-deleted rows.",
+      "route": "/purge",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

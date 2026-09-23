@@ -41,6 +41,17 @@ export interface EnvVarSpec {
   example?: string;
 }
 
+export interface OperationSpec {
+  /** Stable kebab-case id, unique within the block. */
+  id: string;
+  title: string;
+  description: string;
+  /** Route this operation serves on the deployed function, e.g. "/work". */
+  route: string;
+  /** Part of the default install set. At least one operation per block must be true. */
+  recommended: boolean;
+}
+
 export interface BlockManifest {
   slug: string;
   /** Position in the catalog, which is also the build and install order. */
@@ -59,6 +70,11 @@ export interface BlockManifest {
   bundler?: "esbuild" | "none";
   /** Implementation depth, surfaced in the README status table. */
   depth: "implemented" | "scaffold";
+  /**
+   * The block's routes as selectable operations, used to build the function registry. Optional so
+   * older manifests still parse; the registry build requires it.
+   */
+  operations?: OperationSpec[];
 }
 
 export class ManifestError extends Error {
@@ -142,6 +158,7 @@ export function parseManifest(raw: unknown, source: string): BlockManifest {
 
   const env = validateEnv(m["env"], problems);
   const triggers = validateTriggers(m["triggers"], problems);
+  const operations = validateOperations(m["operations"], problems);
 
   if (problems.length > 0) {
     throw new ManifestError(`${source} is invalid:\n${problems.map((p) => `  - ${p}`).join("\n")}`);
@@ -160,6 +177,7 @@ export function parseManifest(raw: unknown, source: string): BlockManifest {
     dependsOn: asArray(m["dependsOn"], "dependsOn", problems) as string[],
     bundler: (m["bundler"] as BlockManifest["bundler"]) ?? "esbuild",
     depth: depth as BlockManifest["depth"],
+    ...(operations !== undefined ? { operations } : {}),
   };
 }
 
@@ -200,6 +218,50 @@ function validateEnv(value: unknown, problems: string[]): EnvVarSpec[] {
       },
     ];
   });
+}
+
+function validateOperations(value: unknown, problems: string[]): OperationSpec[] | undefined {
+  if (value === undefined) return undefined;
+  const entries = asArray(value, "operations", problems);
+  const ids = new Set<string>();
+  const ops = entries.flatMap((entry, i): OperationSpec[] => {
+    if (typeof entry !== "object" || entry === null) {
+      problems.push(`operations[${i}] must be an object`);
+      return [];
+    }
+    const o = entry as Record<string, unknown>;
+    const id = o["id"];
+    if (typeof id !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(id)) {
+      problems.push(`operations[${i}].id must be kebab-case`);
+      return [];
+    }
+    if (ids.has(id)) problems.push(`operations[${i}].id "${id}" is duplicated`);
+    ids.add(id);
+    const route = o["route"];
+    if (typeof route !== "string" || !route.startsWith("/")) {
+      problems.push(`operations[${i}] (${id}) route must be a path starting with "/"`);
+    }
+    if (typeof o["title"] !== "string" || o["title"] === "") {
+      problems.push(`operations[${i}] (${id}) needs a title`);
+    }
+    if (typeof o["description"] !== "string" || o["description"] === "") {
+      problems.push(`operations[${i}] (${id}) needs a description`);
+    }
+    return [
+      {
+        id,
+        title: String(o["title"] ?? ""),
+        description: String(o["description"] ?? ""),
+        route: String(route ?? "/"),
+        recommended: o["recommended"] === true,
+      },
+    ];
+  });
+  // The registry requires a non-empty recommended default set.
+  if (ops.length > 0 && !ops.some((o) => o.recommended)) {
+    problems.push("operations must include at least one recommended: true");
+  }
+  return ops;
 }
 
 function validateTriggers(value: unknown, problems: string[]): TriggerSpec[] {

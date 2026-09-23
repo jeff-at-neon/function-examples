@@ -55,5 +55,35 @@
       "functionPath": "/snapshot",
       "description": "Take a daily snapshot and record findings. One reading shows what is slow; a series shows what got slower."
     }
+  ],
+  "operations": [
+    {
+      "id": "snapshot",
+      "title": "POST /snapshot",
+      "description": "Cron. Take a snapshot and record findings.",
+      "route": "/snapshot",
+      "recommended": true
+    },
+    {
+      "id": "findings",
+      "title": "GET /findings",
+      "description": "Findings from the latest snapshot.",
+      "route": "/findings",
+      "recommended": true
+    },
+    {
+      "id": "trends",
+      "title": "GET /trends",
+      "description": "Statements whose mean time is rising.",
+      "route": "/trends",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

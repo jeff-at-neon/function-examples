@@ -1,0 +1,40 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://neon.com/functions/schemas/registry.schema.json",
+	"title": "Neon Function Registry Index",
+	"description": "Discovery index for the Neon Function Registry. Points at each template's template.json by a safe relative path.",
+	"type": "object",
+	"required": ["name", "templates"],
+	"additionalProperties": false,
+	"properties": {
+		"$schema": { "type": "string" },
+		"name": { "type": "string", "minLength": 1 },
+		"homepage": { "type": "string", "format": "uri" },
+		"templates": {
+			"type": "array",
+			"maxItems": 500,
+			"items": {
+				"type": "object",
+				"required": ["id", "title", "description", "path"],
+				"additionalProperties": false,
+				"properties": {
+					"id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+					"provider": { "type": "string" },
+					"title": { "type": "string", "minLength": 1 },
+					"description": { "type": "string", "minLength": 1 },
+					"path": {
+						"type": "string",
+						"description": "Relative path from this index to the template's template.json."
+					},
+					"logo": {
+						"type": "string",
+						"format": "uri",
+						"pattern": "^https://",
+						"maxLength": 2048,
+						"description": "Optional absolute HTTPS URL to a listing logo. Display metadata only; never fetched or scaffolded."
+					}
+				}
+			}
+		}
+	}
+}

@@ -96,5 +96,42 @@
       "functionPath": "/reconcile",
       "description": "Required by §5. Retries and missed deliveries."
     }
+  ],
+  "operations": [
+    {
+      "id": "transcribe",
+      "title": "POST /transcribe",
+      "description": "Storage trigger. Transcribe one file.",
+      "route": "/transcribe",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "Cron. Retries and missed deliveries.",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "search",
+      "title": "GET /search",
+      "description": "Search spoken content, returning timestamps.",
+      "route": "/search",
+      "recommended": true
+    },
+    {
+      "id": "transcripts-id",
+      "title": "GET /transcripts/:id",
+      "description": "A transcript with its segments.",
+      "route": "/transcripts/:id",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

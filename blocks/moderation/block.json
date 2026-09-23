@@ -95,5 +95,49 @@
       "functionPath": "/reconcile",
       "description": "Required by §5, and load-bearing here: an object the trigger missed stays quarantined, so a missed delivery is a stuck upload rather than unmoderated content."
     }
+  ],
+  "operations": [
+    {
+      "id": "scan",
+      "title": "POST /scan",
+      "description": "Storage trigger. Classify an upload.",
+      "route": "/scan",
+      "recommended": true
+    },
+    {
+      "id": "text",
+      "title": "POST /text",
+      "description": "Classify inline text synchronously.",
+      "route": "/text",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "Cron. Rescan stuck items.",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "review",
+      "title": "GET /review",
+      "description": "Items awaiting human review.",
+      "route": "/review",
+      "recommended": true
+    },
+    {
+      "id": "decide-id",
+      "title": "POST /decide/:id",
+      "description": "Record a human decision.",
+      "route": "/decide/:id",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

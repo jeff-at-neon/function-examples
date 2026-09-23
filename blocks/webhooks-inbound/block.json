@@ -6,21 +6,103 @@
   "schema": "blocks_webhooks_inbound",
   "billing": "free",
   "depth": "implemented",
-  "capabilities": ["postgres", "custom_domain"],
-  "dependsOn": ["queue"],
-  "env": [
-    { "name": "DATABASE_URL", "description": "Branch connection string. Injected automatically by Neon.", "required": true, "injected": true },
-    { "name": "WEBHOOK_SECRET_STRIPE", "description": "Stripe signing secret (whsec_...). Required only if you receive Stripe webhooks.", "required": false },
-    { "name": "WEBHOOK_SECRET_GITHUB", "description": "GitHub webhook secret. Required only for GitHub.", "required": false },
-    { "name": "WEBHOOK_SECRET_SHOPIFY", "description": "Shopify API secret. Required only for Shopify.", "required": false },
-    { "name": "WEBHOOK_SECRET_SLACK", "description": "Slack signing secret. Required only for Slack.", "required": false },
-    { "name": "WEBHOOK_SECRET_CLERK", "description": "Clerk/Svix signing secret (whsec_...). Required only for Clerk.", "required": false },
-    { "name": "WEBHOOK_SECRET_GENERIC", "description": "Shared secret for the generic HMAC verifier.", "required": false },
-    { "name": "WEBHOOK_TOLERANCE_SECONDS", "description": "Reject requests whose signed timestamp is outside this window. This is replay protection; widen it only after ruling out clock skew.", "required": false, "default": "300" },
-    { "name": "WEBHOOK_MAX_BODY_BYTES", "description": "Largest body accepted. The endpoint is public, so an unbounded read is a denial-of-service vector.", "required": false, "default": "1048576" },
-    { "name": "WEBHOOK_DEDUPE_WINDOW_MINUTES", "description": "Window for body-hash dedupe, used for providers that send no event id.", "required": false, "default": "60" },
-    { "name": "WEBHOOK_SIGNATURE_HEADER", "description": "Header the generic verifier reads.", "required": false, "default": "x-signature" },
-    { "name": "WEBHOOK_SIGNATURE_PREFIX", "description": "Prefix stripped from the generic signature header, e.g. \"sha256=\".", "required": false, "default": "" }
+  "capabilities": [
+    "postgres",
+    "custom_domain"
   ],
-  "triggers": []
+  "dependsOn": [
+    "queue"
+  ],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "WEBHOOK_SECRET_STRIPE",
+      "description": "Stripe signing secret (whsec_...). Required only if you receive Stripe webhooks.",
+      "required": false
+    },
+    {
+      "name": "WEBHOOK_SECRET_GITHUB",
+      "description": "GitHub webhook secret. Required only for GitHub.",
+      "required": false
+    },
+    {
+      "name": "WEBHOOK_SECRET_SHOPIFY",
+      "description": "Shopify API secret. Required only for Shopify.",
+      "required": false
+    },
+    {
+      "name": "WEBHOOK_SECRET_SLACK",
+      "description": "Slack signing secret. Required only for Slack.",
+      "required": false
+    },
+    {
+      "name": "WEBHOOK_SECRET_CLERK",
+      "description": "Clerk/Svix signing secret (whsec_...). Required only for Clerk.",
+      "required": false
+    },
+    {
+      "name": "WEBHOOK_SECRET_GENERIC",
+      "description": "Shared secret for the generic HMAC verifier.",
+      "required": false
+    },
+    {
+      "name": "WEBHOOK_TOLERANCE_SECONDS",
+      "description": "Reject requests whose signed timestamp is outside this window. This is replay protection; widen it only after ruling out clock skew.",
+      "required": false,
+      "default": "300"
+    },
+    {
+      "name": "WEBHOOK_MAX_BODY_BYTES",
+      "description": "Largest body accepted. The endpoint is public, so an unbounded read is a denial-of-service vector.",
+      "required": false,
+      "default": "1048576"
+    },
+    {
+      "name": "WEBHOOK_DEDUPE_WINDOW_MINUTES",
+      "description": "Window for body-hash dedupe, used for providers that send no event id.",
+      "required": false,
+      "default": "60"
+    },
+    {
+      "name": "WEBHOOK_SIGNATURE_HEADER",
+      "description": "Header the generic verifier reads.",
+      "required": false,
+      "default": "x-signature"
+    },
+    {
+      "name": "WEBHOOK_SIGNATURE_PREFIX",
+      "description": "Prefix stripped from the generic signature header, e.g. \"sha256=\".",
+      "required": false,
+      "default": ""
+    }
+  ],
+  "triggers": [],
+  "operations": [
+    {
+      "id": "hooks-provider",
+      "title": "POST /hooks/:provider",
+      "description": "receive a webhook",
+      "route": "/hooks/:provider",
+      "recommended": true
+    },
+    {
+      "id": "replay",
+      "title": "POST /replay",
+      "description": "re-publish archived deliveries after a handler fix",
+      "route": "/replay",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
+    }
+  ]
 }

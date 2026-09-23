@@ -42,5 +42,49 @@
       "functionPath": "/rollup",
       "description": "Aggregate exposures and conversions into daily results, so the readout does not scan raw events."
     }
+  ],
+  "operations": [
+    {
+      "id": "flags",
+      "title": "POST /flags",
+      "description": "Create or update a flag.",
+      "route": "/flags",
+      "recommended": true
+    },
+    {
+      "id": "evaluate",
+      "title": "GET /evaluate",
+      "description": "Evaluate a flag for a subject and log exposure.",
+      "route": "/evaluate",
+      "recommended": true
+    },
+    {
+      "id": "convert",
+      "title": "POST /convert",
+      "description": "Record a conversion.",
+      "route": "/convert",
+      "recommended": true
+    },
+    {
+      "id": "results",
+      "title": "GET /results",
+      "description": "Readout per variant.",
+      "route": "/results",
+      "recommended": true
+    },
+    {
+      "id": "rollup",
+      "title": "POST /rollup",
+      "description": "Cron. Aggregate into daily results.",
+      "route": "/rollup",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

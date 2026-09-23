@@ -75,5 +75,42 @@
       "functionPath": "/digest",
       "description": "Build and send digest rollups."
     }
+  ],
+  "operations": [
+    {
+      "id": "notify",
+      "title": "POST /notify",
+      "description": "Enqueue a notification, applying preferences and quiet hours.",
+      "route": "/notify",
+      "recommended": true
+    },
+    {
+      "id": "send",
+      "title": "POST /send",
+      "description": "Cron. Send due and released notifications.",
+      "route": "/send",
+      "recommended": true
+    },
+    {
+      "id": "digest",
+      "title": "POST /digest",
+      "description": "Cron. Roll up digested notifications.",
+      "route": "/digest",
+      "recommended": true
+    },
+    {
+      "id": "preferences",
+      "title": "GET /preferences",
+      "description": "A user's preferences.",
+      "route": "/preferences",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

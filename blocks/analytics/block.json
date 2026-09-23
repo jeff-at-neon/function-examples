@@ -50,5 +50,42 @@
       "functionPath": "/rollup",
       "description": "Sessionize new events and refresh daily aggregates. Off-peak, because it scans a day of raw events."
     }
+  ],
+  "operations": [
+    {
+      "id": "track",
+      "title": "POST /track",
+      "description": "Ingest a batch of events, idempotently.",
+      "route": "/track",
+      "recommended": true
+    },
+    {
+      "id": "rollup",
+      "title": "POST /rollup",
+      "description": "Cron. Sessionize and aggregate.",
+      "route": "/rollup",
+      "recommended": true
+    },
+    {
+      "id": "funnel",
+      "title": "GET /funnel",
+      "description": "Ordered-step funnel conversion.",
+      "route": "/funnel",
+      "recommended": true
+    },
+    {
+      "id": "retention",
+      "title": "GET /retention",
+      "description": "Cohort retention by week.",
+      "route": "/retention",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "Liveness and readiness, backed by the block's v_status view.",
+      "route": "/health",
+      "recommended": false
+    }
   ]
 }

@@ -6,8 +6,13 @@
   "schema": "blocks_ingest_router",
   "billing": "free",
   "depth": "implemented",
-  "capabilities": ["postgres", "object_storage"],
-  "dependsOn": ["queue"],
+  "capabilities": [
+    "postgres",
+    "object_storage"
+  ],
+  "dependsOn": [
+    "queue"
+  ],
   "env": [
     {
       "name": "DATABASE_URL",
@@ -88,6 +93,29 @@
       "cron": "37 * * * *",
       "functionPath": "/reconcile",
       "description": "Required by §5. Re-dispatches objects the trigger never delivered."
+    }
+  ],
+  "operations": [
+    {
+      "id": "route",
+      "title": "POST /route",
+      "description": "storage trigger — classify and dispatch",
+      "route": "/route",
+      "recommended": true
+    },
+    {
+      "id": "reconcile",
+      "title": "POST /reconcile",
+      "description": "cron — re-dispatch what the trigger missed",
+      "route": "/reconcile",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
     }
   ]
 }
