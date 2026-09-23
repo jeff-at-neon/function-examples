@@ -32,6 +32,19 @@ const esbuild = await import("esbuild");
 
 const SECRET_HINT = /SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL/;
 
+// ESM output can't service the dynamic require()s that CommonJS deps (pg and friends) make of Node
+// builtins — esbuild's shim throws "Dynamic require of X is not supported" at load, killing the
+// deploy before it runs. Give the bundle a real require via createRequire, plus the __filename/
+// __dirname globals CJS deps expect. esbuild's __require shim delegates to this when it exists.
+const ESM_REQUIRE_BANNER = [
+  "import { createRequire as __createRequire } from 'node:module';",
+  "import { fileURLToPath as __fileURLToPath } from 'node:url';",
+  "import { dirname as __pathDirname } from 'node:path';",
+  "const require = __createRequire(import.meta.url);",
+  "const __filename = __fileURLToPath(import.meta.url);",
+  "const __dirname = __pathDirname(__filename);",
+].join("\n");
+
 /** The template.json route pattern forbids ':', so express a path param as a plain segment. */
 function sanitizeRoute(route) {
   return route.replace(/:/g, "").replace(/\/{2,}/g, "/");
@@ -118,18 +131,30 @@ for (const { manifest, dir } of blocks) {
       target: "node24",
       external: ["pg-native", "cloudflare:sockets"],
       keepNames: true,
+      banner: { js: ESM_REQUIRE_BANNER },
       outfile: path.join(templateDir, "index.mjs"),
       logLevel: "silent",
     });
     if (result.errors.length > 0) throw new Error(result.errors.map((e) => e.text).join("; "));
 
-    const bundle = await readFile(path.join(templateDir, "index.mjs"), "utf8");
+    const indexPath = path.join(templateDir, "index.mjs");
+    const bundle = await readFile(indexPath, "utf8");
     if (/@neon-blocks\//.test(bundle)) {
       throw new Error("bundle still references @neon-blocks/* — it is not self-contained");
     }
     if (/from\s*["']pg["']/.test(bundle)) {
       throw new Error("bundle still imports 'pg' — it must be inlined (the guest has no node_modules)");
     }
+
+    // Load-check: import the bundle the way the runtime does (await import), catching load-time
+    // failures — e.g. "Dynamic require of X is not supported" — before publishing a broken zip.
+    const check =
+      `import(${JSON.stringify(indexPath)})` +
+      `.then((m) => { if (typeof m.default?.fetch !== "function") { console.error("no default.fetch export"); process.exit(3); } })` +
+      `.catch((e) => { console.error(e && e.message ? e.message : e); process.exit(3); });`;
+    await run("node", ["--input-type=module", "-e", check]).catch((err) => {
+      throw new Error(`bundle failed to load as ESM: ${String(err.stderr || err.message).trim()}`);
+    });
 
     // README + migrations travel with the template so it is self-describing, renderable, and — for
     // a self-migrating handler — the SQL is readable from /opt/function/migrations at runtime.
