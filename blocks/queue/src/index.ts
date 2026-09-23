@@ -28,6 +28,7 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { activeTransport, EventConsumer, publish } from "@neon-blocks/events";
 import { enqueue, replayDead, Worker } from "@neon-blocks/queue";
 import { loadQueueConfig } from "./config.js";
@@ -212,9 +213,11 @@ function requireString(body: Record<string, unknown>, key: string): string {
   return value;
 }
 
-export default {
+export default autoMigrate({
+  block: "queue",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 export { loadQueueConfig, parseConcurrency } from "./config.js";
 export { sweep, reclaimExpiredLeases, purgeDeliveredEvents } from "./sweep.js";

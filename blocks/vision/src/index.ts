@@ -29,6 +29,7 @@ import {
   type Logger,
   type Queryable,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { defaultChat } from "@neon-blocks/ai";
 import { detectKind, ObjectNotFoundError, StorageClient } from "@neon-blocks/storage";
 import { analyzeImage, type AnalysisKind } from "./analyze.js";
@@ -363,9 +364,11 @@ async function record(
   );
 }
 
-export default {
+export default autoMigrate({
+  block: "vision",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 export {
   analyzeImage,

@@ -24,6 +24,7 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { defaultEmbeddings, toVectorLiteral } from "@neon-blocks/ai";
 import { loadCacheConfig } from "./config.js";
 import { distanceToSimilarity, meetsThreshold, promptHash, tokensSaved } from "./similarity.js";
@@ -243,9 +244,11 @@ function requireString(body: Record<string, unknown>, key: string): string {
   return value;
 }
 
-export default {
+export default autoMigrate({
+  block: "semantic-cache",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 // Re-exported so unit tests can import the pure logic directly.
 export { loadCacheConfig, SPEC } from "./config.js";

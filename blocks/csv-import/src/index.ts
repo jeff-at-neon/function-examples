@@ -29,6 +29,7 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { StorageClient, detectKind, ObjectNotFoundError } from "@neon-blocks/storage";
 import { loadCsvConfig } from "./config.js";
 import { runImport } from "./import.js";
@@ -176,9 +177,11 @@ function requireString(body: Record<string, unknown>, key: string): string {
   return value;
 }
 
-export default {
+export default autoMigrate({
+  block: "csv-import",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 // Re-exported so unit tests can import the pure logic directly.
 export { loadCsvConfig, SPEC } from "./config.js";

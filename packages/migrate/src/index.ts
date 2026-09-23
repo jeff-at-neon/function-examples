@@ -7,9 +7,10 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 import type { Pool } from "pg";
-import { withAdvisoryLock, withTransaction } from "@neon-blocks/core";
+import { getPool, withAdvisoryLock, withTransaction } from "@neon-blocks/core";
 
 export interface Migration {
   /** Zero-padded numeric prefix, e.g. "001". */
@@ -206,4 +207,48 @@ export async function rollbackMigrations(
     rolled.push(version);
   }
   return rolled;
+}
+
+/**
+ * Wrap a block's fetch handler so it applies the block's own migrations once, on the first request
+ * of a cold start, before serving. This makes a bare function-deploy a complete install for an
+ * independent block: the console ships code + env, and the handler brings its schema up to date
+ * idempotently (checksummed, advisory-locked, recorded in blocks_core.migrations).
+ *
+ * `migrationsUrl` is resolved relative to the deployed entry — `new URL("./migrations/",
+ * import.meta.url)` — because the bundle mounts with index.mjs and migrations/ as siblings at
+ * /opt/function. The migration SQL must therefore travel inside the artifact.
+ *
+ * A block only applies its OWN migrations. Blocks with dependsOn still require their dependencies
+ * installed first; the installer orders the stack (dependencies before dependents).
+ */
+export function autoMigrate(opts: {
+  block: string;
+  migrationsUrl: URL | string;
+  fetch: (request: Request) => Promise<Response> | Response;
+}): { fetch: (request: Request) => Promise<Response> } {
+  let ready: Promise<void> | null = null;
+  const ensure = (): Promise<void> => {
+    if (!ready) {
+      ready = (async () => {
+        const dir =
+          typeof opts.migrationsUrl === "string" ? opts.migrationsUrl : fileURLToPath(opts.migrationsUrl);
+        const migrations = await loadMigrations(dir);
+        await applyMigrations(getPool(), opts.block, migrations);
+      })().catch((err) => {
+        // Reset so a transient failure (e.g. the database briefly unreachable) retries next request
+        // rather than wedging the process into a permanently un-migrated state.
+        ready = null;
+        throw err;
+      });
+    }
+    return ready;
+  };
+
+  return {
+    fetch: async (request: Request): Promise<Response> => {
+      await ensure();
+      return opts.fetch(request);
+    },
+  };
 }

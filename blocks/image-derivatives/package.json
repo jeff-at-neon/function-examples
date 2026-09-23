@@ -8,6 +8,7 @@
   "main": "./dist/index.js",
   "dependencies": {
     "@neon-blocks/core": "0.1.0",
-    "@neon-blocks/storage": "0.1.0"
+    "@neon-blocks/storage": "0.1.0",
+    "@neon-blocks/migrate": "0.1.0"
   }
 }

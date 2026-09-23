@@ -25,6 +25,7 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { loadFlagsConfig } from "./config.js";
 import { bucketOf, variantFor } from "./bucketing.js";
 import { buildResults, type VariantStat } from "./stats.js";
@@ -290,9 +291,11 @@ function requireString(body: Record<string, unknown>, key: string): string {
   return value;
 }
 
-export default {
+export default autoMigrate({
+  block: "feature-flags",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 // Re-exported so unit tests can import the pure logic directly.
 export { loadFlagsConfig, SPEC } from "./config.js";

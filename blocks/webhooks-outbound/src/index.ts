@@ -32,6 +32,7 @@ import {
   type Logger,
   type Queryable,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { matchesPattern } from "@neon-blocks/events";
 import {
   assertSafeEndpointUrl,
@@ -491,9 +492,11 @@ function requireString(body: Record<string, unknown>, key: string): string {
   return value;
 }
 
-export default {
+export default autoMigrate({
+  block: "webhooks-outbound",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 export {
   signPayload,

@@ -4,11 +4,24 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "references": [
-    { "path": "../../packages/core" },
-    { "path": "../../packages/ai" },
-    { "path": "../../packages/queue" },
-    { "path": "../../packages/storage" }
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/ai"
+    },
+    {
+      "path": "../../packages/queue"
+    },
+    {
+      "path": "../../packages/storage"
+    },
+    {
+      "path": "../../packages/migrate"
+    }
   ]
 }

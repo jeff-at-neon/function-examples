@@ -28,6 +28,7 @@ import {
   type Logger,
   type Queryable,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { publish } from "@neon-blocks/events";
 import {
   billingPeriodFor,
@@ -488,9 +489,11 @@ function requireString(body: Record<string, unknown>, key: string): string {
   return value;
 }
 
-export default {
+export default autoMigrate({
+  block: "billing",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 export {
   evaluateAccess,

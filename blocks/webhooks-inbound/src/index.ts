@@ -26,6 +26,7 @@ import {
   type Logger,
   type Queryable,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { publish } from "@neon-blocks/events";
 import { verifyWebhook, type Provider } from "./verify.js";
 
@@ -338,9 +339,11 @@ function safeHeaders(headers: Headers): Record<string, string> {
   return out;
 }
 
-export default {
+export default autoMigrate({
+  block: "webhooks-inbound",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 export {
   verifyWebhook,

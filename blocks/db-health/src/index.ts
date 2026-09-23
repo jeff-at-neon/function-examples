@@ -31,6 +31,7 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { loadHealthConfig } from "./config.js";
 import { assessConnectionPressure, capacityCostNote } from "./capacity.js";
 import { runSchemaDrift } from "./drift-run.js";
@@ -348,9 +349,11 @@ function requireString(body: Record<string, unknown>, key: string): string {
   return value;
 }
 
-export default {
+export default autoMigrate({
+  block: "db-health",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 // Re-exported so unit tests can import the pure logic directly.
 export { loadHealthConfig, SPEC } from "./config.js";

@@ -22,6 +22,7 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { defaultEmbeddings } from "@neon-blocks/ai";
 import { hybridSearch, logQuery } from "./search.js";
 
@@ -189,9 +190,11 @@ router.get("/health", async () => {
   return json(report, { status: report.status === "ok" ? 200 : 503 });
 });
 
-export default {
+export default autoMigrate({
+  block: "hybrid-search",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 export { hybridSearch, logQuery } from "./search.js";
 export {

@@ -30,6 +30,7 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
+import { autoMigrate } from "@neon-blocks/migrate";
 import { StorageClient, detectKind, ObjectNotFoundError } from "@neon-blocks/storage";
 import { defaultChat } from "@neon-blocks/ai";
 import { loadExtractConfig } from "./config.js";
@@ -224,9 +225,11 @@ function requireString(body: Record<string, unknown>, key: string): string {
   return value;
 }
 
-export default {
+export default autoMigrate({
+  block: "doc-extraction",
+  migrationsUrl: new URL("./migrations/", import.meta.url),
   fetch: (request: Request): Promise<Response> => router.handle(request),
-};
+});
 
 // Re-exported so unit tests can import the pure logic directly.
 export { loadExtractConfig, SPEC } from "./config.js";
