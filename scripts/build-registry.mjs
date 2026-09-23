@@ -13,6 +13,7 @@
  */
 
 import { mkdir, readFile, writeFile, rm, cp } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
@@ -35,6 +36,15 @@ const SECRET_HINT = /SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL/;
 /** The template.json route pattern forbids ':', so express a path param as a plain segment. */
 function sanitizeRoute(route) {
   return route.replace(/:/g, "").replace(/\/{2,}/g, "/");
+}
+
+/** Neon function_slug: 1-20 lowercase alphanumerics, no hyphens. Must match scripts/deploy.mjs. */
+function functionSlugFor(blockSlug) {
+  const slug = blockSlug.replace(/-/g, "").slice(0, 20).toLowerCase();
+  if (!/^[a-z0-9]{1,20}$/.test(slug)) {
+    throw new Error(`Cannot derive a legal function_slug from "${blockSlug}"`);
+  }
+  return slug;
 }
 
 function toEnvironment(env) {
@@ -127,6 +137,13 @@ for (const { manifest, dir } of blocks) {
     // and secrets are NOT included (sent separately by the deploy API), keeping the artifact inert.
     await run("zip", ["-q", "-r", "-X", path.join(outDir, `${id}.zip`), "."], { cwd: templateDir });
 
+    // Digest + size for the console's integrity check and download UI.
+    const zipContents = await readFile(path.join(outDir, `${id}.zip`));
+    const sha256 = createHash("sha256").update(zipContents).digest("hex");
+
+    // Card-level fields live in the index so the console can render the browse grid from one fetch
+    // (id, title, description, depth, billing, capabilities badges) and deploy from it (functionSlug,
+    // zip, sha256) without fetching every template.json.
     templates.push({
       rank: manifest.rank,
       entry: {
@@ -134,8 +151,15 @@ for (const { manifest, dir } of blocks) {
         provider: "neon",
         title: manifest.name,
         description: manifest.summary,
+        depth: manifest.depth,
+        billing: manifest.billing,
+        capabilities: manifest.capabilities ?? [],
         dependsOn: manifest.dependsOn ?? [],
+        functionSlug: functionSlugFor(id),
         path: `${id}/template.json`,
+        zip: `${id}.zip`,
+        sha256,
+        bytes: zipContents.byteLength,
       },
     });
 

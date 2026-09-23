@@ -22,14 +22,48 @@
 					"provider": { "type": "string" },
 					"title": { "type": "string", "minLength": 1 },
 					"description": { "type": "string", "minLength": 1 },
+					"depth": {
+						"type": "string",
+						"enum": ["scaffold", "implemented"],
+						"description": "Card badge: implemented vs scaffold."
+					},
+					"billing": {
+						"type": "string",
+						"enum": ["free", "meter"],
+						"description": "Card badge: free vs metered."
+					},
+					"capabilities": {
+						"type": "array",
+						"description": "Neon capabilities the block uses (postgres, pgvector, object_storage, ai_gateway, …), for card badges.",
+						"items": { "type": "string" }
+					},
 					"dependsOn": {
 						"type": "array",
 						"description": "Ids of templates this one requires installed first, mirrored from the template so the browse UI can resolve stacks without fetching every template.",
 						"items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
 					},
+					"functionSlug": {
+						"type": "string",
+						"pattern": "^[a-z0-9]{1,20}$",
+						"description": "Deploy-safe function slug (1-20 lowercase alphanumerics) the trigger API requires. Matches what deploy.mjs derives."
+					},
 					"path": {
 						"type": "string",
 						"description": "Relative path from this index to the template's template.json."
+					},
+					"zip": {
+						"type": "string",
+						"description": "Relative path to the deployable <id>.zip (index.mjs at root + migrations/). Compose with the hosting base URL."
+					},
+					"sha256": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$",
+						"description": "SHA-256 of the zip, for integrity verification before deploy."
+					},
+					"bytes": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Size of the zip in bytes."
 					},
 					"logo": {
 						"type": "string",

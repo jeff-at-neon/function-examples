@@ -37,19 +37,42 @@ The generator emits a servable tree (base URL = registry root):
   "homepage": "https://neon.com/docs/functions",
   "templates": [
     {
-      "id": "queue",
+      "id": "rag",
       "provider": "neon",
-      "title": "Outbox + Durable Job Queue",
-      "description": "Postgres-backed job queue and event outbox: retries, backoff, DLQ, idempotency, concurrency caps.",
-      "path": "queue/template.json"
+      "title": "Document → RAG Ingestion",
+      "description": "Drop a document in a bucket; it becomes semantically searchable…",
+      "depth": "implemented",
+      "billing": "free",
+      "capabilities": ["postgres", "pgvector", "object_storage", "ai_gateway"],
+      "dependsOn": ["queue"],
+      "functionSlug": "rag",
+      "path": "rag/template.json",
+      "zip": "rag.zip",
+      "sha256": "9cb317d7a186adf05e8db22feff08ed94c314f316ecaacd332c8a232c38b67e6",
+      "bytes": 65381
     }
   ]
 }
 ```
 
-- `templates` is ordered by build rank (foundations first).
-- `path` is relative to the index and points at the template's `template.json`.
-- `logo` (optional) is an absolute `https://` URL — display metadata only, never fetched by the CLI.
+Each entry carries enough to render the browse grid **and** deploy from one fetch — no need to pull
+every `template.json` for the catalog page:
+
+- `depth` (`implemented`/`scaffold`), `billing` (`free`/`meter`), `capabilities` — card badges.
+- `dependsOn` — resolve the install stack (foundations first).
+- **`functionSlug`** — the deploy-safe slug (`^[a-z0-9]{1,20}$`) the trigger API requires. Use this;
+  don't re-derive it.
+- **`zip`** — relative path to the deployable archive; compose with the hosting base:
+  `<base>/rag.zip`. **`sha256`** + **`bytes`** — verify integrity before deploying.
+- `path` — the template's `template.json` (full env/operations/triggers detail).
+- `templates` is ordered by build rank (foundations first). `logo` (optional) is an absolute
+  `https://` URL, display-only.
+
+## When migrations run
+
+`autoMigrate` wraps the whole handler, so migrations apply on the **first request to any route**
+after a cold start — not at deploy. The console should `GET /health` (any route works) once after
+deploying to bring the schema up immediately, rather than waiting for organic traffic or a trigger.
 
 ## `template.json` — the detail view
 
