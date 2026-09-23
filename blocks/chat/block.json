@@ -1,8 +1,8 @@
 {
   "slug": "chat",
   "rank": 26,
-  "name": "Chat + Agent Endpoint",
-  "summary": "A streaming chat/agent HTTP endpoint on your branch: SSE token streaming, a bounded tool loop, structured output, and every turn persisted to Postgres.",
+  "name": "AI chat",
+  "summary": "Stream tokens from an LLM through the AI Gateway, persisting each turn",
   "schema": "blocks_chat",
   "billing": "meter",
   "depth": "scaffold",

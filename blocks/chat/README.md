@@ -1,7 +1,6 @@
-# Block 26 — Chat + Agent Endpoint
+# Block 26 — AI chat
 
-A streaming chat/agent HTTP endpoint deployed onto your branch, running next to Postgres. Accepts a
-prompt, streams the model's response as it arrives, and persists every turn.
+Stream tokens from an LLM through the AI Gateway, persisting each turn
 
 **Block 26 of the catalog**, added after the original 25.
 
