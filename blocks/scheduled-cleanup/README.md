@@ -1,8 +1,6 @@
-# Block 28 — Scheduled Cleanup Job
+# Block 28 — Scheduled jobs
 
-A cron-triggered Postgres maintenance job: expire trials, abandoned carts, stale sessions, or any
-time-bounded record. Runs under an advisory lock with a run log, so overlapping runs are safe and
-auditable.
+Expire trials, carts, and stale rows on a cron schedule
 
 **Block 28 of the catalog.**
 

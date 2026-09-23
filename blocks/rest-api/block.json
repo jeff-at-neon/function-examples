@@ -1,8 +1,8 @@
 {
   "slug": "rest-api",
   "rank": 27,
-  "name": "REST API on Postgres",
-  "summary": "A complete CRUD REST API over a Postgres table: list with pagination, create, read, update, and delete, with input validation and consistent JSON errors.",
+  "name": "REST API",
+  "summary": "Create, read, update, and delete rows over HTTP",
   "schema": "blocks_rest_api",
   "billing": "free",
   "depth": "implemented",

@@ -1,8 +1,8 @@
 {
   "slug": "mcp",
   "rank": 29,
-  "name": "MCP Server on Postgres",
-  "summary": "An MCP server over HTTP that exposes Postgres-backed tools to an AI agent (search_products, get_product), with JSON-RPC handling and a tool-call audit log.",
+  "name": "MCP server",
+  "summary": "Expose Postgres-backed tools to an AI agent over MCP",
   "schema": "blocks_mcp",
   "billing": "free",
   "depth": "scaffold",

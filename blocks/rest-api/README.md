@@ -1,7 +1,6 @@
-# Block 27 — REST API on Postgres
+# Block 27 — REST API
 
-A complete CRUD REST API over a Postgres table, running on a Neon Function next to the database.
-List, create, read, update, and delete, with input validation and consistent JSON errors.
+Create, read, update, and delete rows over HTTP
 
 **Block 27 of the catalog.**
 

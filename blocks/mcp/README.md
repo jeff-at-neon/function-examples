@@ -1,8 +1,6 @@
-# Block 29 — MCP Server on Postgres
+# Block 29 — MCP server
 
-A Model Context Protocol server over HTTP that exposes Postgres-backed tools to an AI agent. Runs on
-a Neon Function next to the database, so every tool call is a local query, and it branches with your
-data like every other block.
+Expose Postgres-backed tools to an AI agent over MCP
 
 **Block 29 of the catalog.**
 
