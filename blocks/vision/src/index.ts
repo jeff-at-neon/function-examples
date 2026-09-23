@@ -31,7 +31,7 @@ import {
 } from "@neon-blocks/core";
 import { autoMigrate } from "@neon-blocks/migrate";
 import { defaultChat } from "@neon-blocks/ai";
-import { detectKind, ObjectNotFoundError, StorageClient } from "@neon-blocks/storage";
+import { detectKind, extensionOf, ObjectNotFoundError, StorageClient } from "@neon-blocks/storage";
 import { analyzeImage, type AnalysisKind } from "./analyze.js";
 
 const log: Logger = createLogger({ block: "vision" });
@@ -88,12 +88,27 @@ const router = new Router();
 router.post("/analyze", async (request) => {
   assertTriggerAuthentic(request, { requireSecret: false });
   const event = await parseTriggerRequest(request);
+
+  // A storage trigger that writes nothing is otherwise invisible — every early exit below returns
+  // cleanly with no row. Log the parsed delivery and each exit reason (with values) so an operator
+  // can see exactly what arrived and why nothing was analysed.
+  log.info("analyze invoked", {
+    type: event.type,
+    bucketName: event.type === "storage_object_created" ? event.bucketName : undefined,
+    objectKey: event.type === "storage_object_created" ? event.objectKey : undefined,
+  });
+
   if (event.type !== "storage_object_created") {
+    log.warn("analyze got a non-storage trigger", { type: event.type });
     return problem(400, "wrong_trigger", `/analyze expects a storage trigger, got ${event.type}`);
   }
 
   const cfg = config();
   if (event.bucketName !== cfg.bucket) {
+    log.warn("analyze got an event for a different bucket", {
+      eventBucket: event.bucketName,
+      configuredBucket: cfg.bucket,
+    });
     return problem(403, "wrong_bucket", `This function only analyses "${cfg.bucket}"`);
   }
 
@@ -104,6 +119,7 @@ router.post("/analyze", async (request) => {
     logger: log.child({ objectKey: event.objectKey }),
   });
 
+  log.info("analyze finished", { objectKey: event.objectKey, status: result.status, reason: result.reason });
   return json({ ok: true, ...result });
 });
 
@@ -118,10 +134,13 @@ router.post("/reconcile", async (request) => {
   const pool = getPool();
   const storage = StorageClient.fromEnv();
 
-  // Missed deliveries: list the bucket and diff against analysed (key, etag) pairs.
+  // Missed deliveries: list the bucket and diff against analysed (key, etag) pairs. Keep keys that
+  // look like images by extension AND extensionless keys (their content-type decides in
+  // analyzeObject), so an extensionless image upload isn't pre-filtered out here the way a bare
+  // key would be. analyzeObject records a skip for anything that turns out not to be an image.
   const listing = await storage.listObjects(cfg.bucket, { prefix: cfg.prefix, maxKeys: 500 });
   const images = listing.objects.filter(
-    (o) => detectKind({ key: o.key }) === "image",
+    (o) => detectKind({ key: o.key }) === "image" || extensionOf(o.key) === undefined,
   );
 
   let analyzed = 0;
@@ -265,20 +284,36 @@ async function analyzeObject(
   const { bucket, objectKey, cfg, logger } = opts;
   const storage = StorageClient.fromEnv();
 
-  // No suffix filter on storage triggers, so non-images arrive here as a matter of course.
-  if (detectKind({ key: objectKey }) !== "image") {
-    return { status: "skipped", objectKey, reason: "not an image" };
-  }
-
+  // HEAD first — it confirms the object exists AND gives us the content-type. Classifying on the
+  // key alone silently drops the very common case of an extensionless upload (SDKs store a bare
+  // id/UUID with `content-type: image/*` and no suffix), which would vanish with no row written.
   let metadata;
   try {
     metadata = await storage.headVerified(bucket, objectKey);
   } catch (err) {
     if (err instanceof ObjectNotFoundError) {
-      logger.warn("event for nonexistent object; likely forged or deleted");
+      // The trigger just told us this object was created, so a 404 here almost always means a
+      // config mismatch — wrong VISION_BUCKET, a prefix the key does/doesn't carry, or storage
+      // creds for a different branch — not a forged event. Log what we actually looked for.
+      logger.warn("HEAD 404 for a trigger-delivered object; check bucket/key/prefix config", {
+        bucket,
+        objectKey,
+      });
       return { status: "skipped", objectKey, reason: "object does not exist" };
     }
     throw err;
+  }
+
+  // No suffix filter on storage triggers, so non-images arrive here as a matter of course. Use the
+  // content-type from the HEAD, falling back to the key extension. Record the skip so a non-image
+  // upload is visible in analyses/health with a reason, instead of ending with nothing to show.
+  const kind = detectKind({ key: objectKey, contentType: metadata.contentType });
+  if (kind !== "image") {
+    await record(db, { bucket, objectKey, etag: metadata.etag, status: "skipped" }, {
+      error: `not an image (kind=${kind}, content-type=${metadata.contentType || "unknown"})`,
+    });
+    logger.info("skipped non-image object", { kind, contentType: metadata.contentType });
+    return { status: "skipped", objectKey, reason: "not an image" };
   }
 
   if (metadata.size > cfg.maxBytes) {
