@@ -10,10 +10,6 @@
  *   POST   /store                 Cache a response.
  *   POST   /sweep                 Cron. Expire entries and report hit rate.
  *   GET    /stats                 Hit rate and tokens saved by namespace.
- *
- * STATUS: scaffold. The schema, safety checks, and control flow are real; the marked TODO seams are
- * the remaining work. Endpoints that are not implemented return 501 with a specific explanation
- * rather than failing in a way that looks like a bug.
  */
 
 import {
@@ -22,30 +18,18 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   parseTriggerEvent,
   problem,
   Router,
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
-import { createHash } from "node:crypto";
+import { defaultEmbeddings, toVectorLiteral } from "@neon-blocks/ai";
+import { loadCacheConfig } from "./config.js";
+import { distanceToSimilarity, meetsThreshold, promptHash, tokensSaved } from "./similarity.js";
+import { similarityLookup } from "./lookup.js";
 
 const log: Logger = createLogger({ block: "semantic-cache" });
-
-const SPEC = {
-  block: "semantic-cache",
-  optional: {
-    CACHE_SIMILARITY_THRESHOLD: "0.95",
-    CACHE_TTL_HOURS: "168",
-    CACHE_EMBEDDING_MODEL: "text-embedding-3-small",
-    CACHE_EMBEDDING_DIMENSIONS: "1536",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -55,43 +39,67 @@ router.post("/lookup", async (request) => {
   const model = requireString(body, "model");
   const namespace = typeof body["namespace"] === "string" ? body["namespace"] : "default";
 
-  const promptHash = createHash("sha256").update(`${namespace}:${model}:${prompt}`).digest("hex");
+  const cfg = loadCacheConfig();
+  const hash = promptHash(namespace, model, prompt);
   const pool = getPool();
 
   // Exact-match fast path first: it skips the embedding call entirely, so a repeated identical
   // prompt costs one indexed lookup and nothing else.
-  const { rows: exact } = await pool.query<{ id: string; response: string; model: string }>(
+  const { rows: exact } = await pool.query<{
+    id: string;
+    response: string;
+    model: string;
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+  }>(
     `UPDATE blocks_semantic_cache.entries
      SET hit_count = hit_count + 1, last_hit_at = now()
      WHERE namespace = $1 AND prompt_hash = $2 AND model = $3 AND expires_at > now()
-     RETURNING id, response, model`,
-    [namespace, promptHash, model],
+     RETURNING id, response, model, prompt_tokens, completion_tokens`,
+    [namespace, hash, model],
   );
 
   if (exact[0]) {
-    await recordStat(pool, namespace, "hit", 0);
+    const saved = tokensSaved({
+      promptTokens: exact[0].prompt_tokens,
+      completionTokens: exact[0].completion_tokens,
+    });
+    await recordStat(pool, namespace, "hit", saved);
     return json({ hit: true, kind: "exact", response: exact[0].response, model: exact[0].model });
   }
 
-  // TODO(semantic-cache): the similarity path.
-  //   1. embed the prompt with CACHE_EMBEDDING_MODEL
-  //   2. SELECT ... ORDER BY prompt_embedding <=> $1 LIMIT 1, scoped to namespace AND model --
-  //      scoping is not optional: crossing namespaces is a cross-tenant leak, and crossing models
-  //      serves a weaker model's answer as a stronger one's
-  //   3. accept only when 1 - distance >= CACHE_SIMILARITY_THRESHOLD. Strict by default: a loose
-  //      threshold returns an answer to a DIFFERENT question, which is worse than a miss because it
-  //      is silently wrong.
-  //   4. on a hit, increment hit_count and record tokens_saved from the stored counts
-  //
-  //   Known limitation no threshold fixes: negation. "delete my account" and "do not delete my
-  //   account" embed very closely and require opposite answers.
+  // Similarity path. Scoping to namespace AND model is enforced in the query; the accept/reject
+  // decision is the strict threshold in similarity.ts. Known limitation no threshold fixes:
+  // negation ("delete my account" vs "do not delete my account" embed very closely).
+  const embeddings = defaultEmbeddings({ model: cfg.model, dimensions: cfg.dimensions });
+  const { vectors } = await embeddings.embed([prompt]);
+  const embedding = vectors[0];
+  if (embedding) {
+    const near = await similarityLookup(pool, { embedding, namespace, model });
+    if (near && meetsThreshold(near.distance, cfg.threshold)) {
+      await pool.query(
+        `UPDATE blocks_semantic_cache.entries
+         SET hit_count = hit_count + 1, last_hit_at = now()
+         WHERE id = $1`,
+        [near.id],
+      );
+      const saved = tokensSaved({
+        promptTokens: near.promptTokens,
+        completionTokens: near.completionTokens,
+      });
+      await recordStat(pool, namespace, "hit", saved);
+      return json({
+        hit: true,
+        kind: "similarity",
+        response: near.response,
+        model: near.model,
+        similarity: distanceToSimilarity(near.distance),
+      });
+    }
+  }
+
   await recordStat(pool, namespace, "miss", 0);
-  return json({
-    hit: false,
-    note:
-      "Exact-match lookup ran and missed. Similarity matching is not yet wired -- see the TODO in " +
-      "src/index.ts.",
-  });
+  return json({ hit: false });
 });
 
 router.post("/store", async (request) => {
@@ -101,30 +109,35 @@ router.post("/store", async (request) => {
   const model = requireString(body, "model");
   const namespace = typeof body["namespace"] === "string" ? body["namespace"] : "default";
 
-  const cfg = config();
-  const ttlHours = cfg.int("CACHE_TTL_HOURS", { min: 1, max: 8_760 });
-  const promptHash = createHash("sha256").update(`${namespace}:${model}:${prompt}`).digest("hex");
+  const cfg = loadCacheConfig();
+  const hash = promptHash(namespace, model, prompt);
 
-  // Stored without an embedding for now, so the exact-match path works immediately. The similarity
-  // path needs the embedding, which is part of the TODO above -- v_status surfaces unembedded
-  // entries so this gap is visible rather than silent.
+  // Embed on store so the similarity path can match this entry later. The prompt_embedding column
+  // is written here rather than backfilled, so there is no window where a live entry is
+  // exact-match-only (v_status still surfaces any unembedded entry as a guard).
+  const embeddings = defaultEmbeddings({ model: cfg.model, dimensions: cfg.dimensions });
+  const { vectors } = await embeddings.embed([prompt]);
+  const embedding = vectors[0] ? toVectorLiteral(vectors[0]) : null;
+
   const { rows } = await getPool().query<{ id: string }>(
     `INSERT INTO blocks_semantic_cache.entries
-       (namespace, prompt, prompt_hash, response, model, prompt_tokens, completion_tokens, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, now() + make_interval(hours => $8::int))
+       (namespace, prompt, prompt_hash, response, model, prompt_embedding,
+        prompt_tokens, completion_tokens, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, now() + make_interval(hours => $9::int))
      ON CONFLICT (namespace, prompt_hash, model) DO UPDATE
        SET response = EXCLUDED.response,
+           prompt_embedding = EXCLUDED.prompt_embedding,
            expires_at = EXCLUDED.expires_at
      RETURNING id`,
     [
-      namespace, prompt, promptHash, response, model,
+      namespace, prompt, hash, response, model, embedding,
       typeof body["promptTokens"] === "number" ? body["promptTokens"] : null,
       typeof body["completionTokens"] === "number" ? body["completionTokens"] : null,
-      ttlHours,
+      cfg.ttlHours,
     ],
   );
 
-  return json({ id: rows[0]?.id, embedded: false }, { status: 201 });
+  return json({ id: rows[0]?.id, embedded: embedding !== null }, { status: 201 });
 });
 
 router.post("/sweep", async (request) => {
@@ -233,3 +246,8 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadCacheConfig, SPEC } from "./config.js";
+export { distanceToSimilarity, meetsThreshold, tokensSaved, promptHash } from "./similarity.js";
+export { similarityLookup } from "./lookup.js";

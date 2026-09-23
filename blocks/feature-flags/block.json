@@ -5,7 +5,7 @@
   "summary": "Deterministic bucketing, exposure logging, and a significance readout — flags that double as A/B tests.",
   "schema": "blocks_feature_flags",
   "billing": "free",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres"
   ],

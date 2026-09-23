@@ -5,7 +5,7 @@
   "summary": "Event ingest, sessionization, and a funnel, retention, and cohort query pack over your own Postgres.",
   "schema": "blocks_analytics",
   "billing": "free",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres"
   ],

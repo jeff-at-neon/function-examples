@@ -5,7 +5,7 @@
   "summary": "Deterministically masks personal data in a branch — database and Object Storage — so a prod copy is safe to hand to a contractor or an AI agent.",
   "schema": "blocks_pii_anonymizer",
   "billing": "meter",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres",
     "object_storage",

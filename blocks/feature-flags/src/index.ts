@@ -11,10 +11,6 @@
  *   POST   /convert               Record a conversion.
  *   GET    /results               Readout per variant.
  *   POST   /rollup                Cron. Aggregate into daily results.
- *
- * STATUS: scaffold. The schema, safety checks, and control flow are real; the marked TODO seams are
- * the remaining work. Endpoints that are not implemented return 501 with a specific explanation
- * rather than failing in a way that looks like a bug.
  */
 
 import {
@@ -23,73 +19,19 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   parseTriggerEvent,
   problem,
   Router,
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
-import { createHash } from "node:crypto";
+import { loadFlagsConfig } from "./config.js";
+import { bucketOf, variantFor } from "./bucketing.js";
+import { buildResults, type VariantStat } from "./stats.js";
 
 const log: Logger = createLogger({ block: "feature-flags" });
 
-const SPEC = {
-  block: "feature-flags",
-  optional: {
-    FLAGS_EXPOSURE_SAMPLE_RATE: "1",
-    FLAGS_DEFAULT_ON_ERROR: "false",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
-
 const router = new Router();
-
-/**
- * Deterministic bucketing.
- *
- * Hash of (flagKey, subjectRef) mapped to 0..9999, so the same subject always lands in the same
- * variant without storing an assignment row per user — which is what makes it sticky across
- * processes and restarts.
- *
- * The flag key must be part of the hash. Hashing the subject alone correlates every experiment: a
- * user in treatment for one test would be in treatment for all of them, silently confounding every
- * result you ever read.
- */
-export function bucketOf(flagKey: string, subjectRef: string): number {
-  const digest = createHash("sha256").update(`${flagKey}:${subjectRef}`).digest();
-  // First 4 bytes as an unsigned int, modulo 10000 for basis-point resolution.
-  return digest.readUInt32BE(0) % 10_000;
-}
-
-/** Pick a variant from normalized weights using a precomputed bucket. */
-export function variantFor(
-  bucket: number,
-  variants: Record<string, number>,
-  rolloutPct: number,
-): string | null {
-  // Rollout gate first, using the same bucket: a subject outside the rollout is consistently
-  // outside it, rather than flickering in and out between requests.
-  if (bucket >= rolloutPct * 100) return null;
-
-  const entries = Object.entries(variants).filter(([, w]) => w > 0);
-  if (entries.length === 0) return null;
-
-  const total = entries.reduce((sum, [, w]) => sum + w, 0);
-  // Rescale the bucket into the rollout range, so weights apply across included subjects rather
-  // than across all traffic.
-  const scaled = (bucket / (rolloutPct * 100)) * total;
-
-  let cumulative = 0;
-  for (const [name, weight] of entries) {
-    cumulative += weight;
-    if (scaled < cumulative) return name;
-  }
-  return entries[entries.length - 1]?.[0] ?? null;
-}
 
 router.post("/flags", async (request) => {
   const body = await readJsonObject(request);
@@ -128,7 +70,7 @@ router.get("/evaluate", async (_request, ctx) => {
   if (!flagKey) throw new ValidationError("?flag= is required");
   if (!subjectRef) throw new ValidationError("?subject= is required");
 
-  const cfg = config();
+  const cfg = loadFlagsConfig();
   const pool = getPool();
 
   const { rows } = await pool.query<{
@@ -149,7 +91,7 @@ router.get("/evaluate", async (_request, ctx) => {
     // unreviewed feature launch.
     return json({
       flag: flagKey,
-      enabled: cfg.bool("FLAGS_DEFAULT_ON_ERROR"),
+      enabled: cfg.defaultOnError,
       variant: null,
       reason: "flag not found; returned FLAGS_DEFAULT_ON_ERROR",
     });
@@ -174,7 +116,7 @@ router.get("/evaluate", async (_request, ctx) => {
 
   // Exposure is logged here -- at evaluation -- not when the subject was bucketed. Sampled to bound
   // write volume, at the cost of proportionally wider confidence intervals.
-  const sampleRate = Number(cfg.get("FLAGS_EXPOSURE_SAMPLE_RATE"));
+  const sampleRate = cfg.sampleRate;
   if (variant !== null && (sampleRate >= 1 || bucket % 10_000 < sampleRate * 10_000)) {
     await pool.query(
       `INSERT INTO blocks_feature_flags.exposures (flag_key, subject_ref, variant, was_override)
@@ -212,10 +154,22 @@ router.post("/convert", async (request) => {
 router.get("/results", async (_request, ctx) => {
   const flagKey = ctx.url.searchParams.get("flag");
   if (!flagKey) throw new ValidationError("?flag= is required");
+  const baseline = ctx.url.searchParams.get("baseline") ?? "control";
+  // How many times this experiment has been checked. The caller supplies it because the block does
+  // not track reads; it feeds the sequential-testing correction.
+  const peeksParam = Number(ctx.url.searchParams.get("peeks"));
+  const peeks = Number.isFinite(peeksParam) && peeksParam >= 1 ? Math.floor(peeksParam) : 1;
 
   // Counts distinct subjects, not exposures: a user seeing a feature twice is one subject, and
   // counting exposures would inflate the denominator and understate the conversion rate.
-  const { rows } = await getPool().query(
+  const { rows } = await getPool().query<{
+    variant: string;
+    metric: string;
+    subjects: string;
+    conversions: string;
+    value_sum: string;
+    conversion_rate_pct: string;
+  }>(
     `SELECT variant, metric,
             sum(subjects)    AS subjects,
             sum(conversions) AS conversions,
@@ -230,20 +184,22 @@ router.get("/results", async (_request, ctx) => {
     [flagKey],
   );
 
-  // TODO(feature-flags): significance testing.
-  //   A two-proportion z-test over subjects and conversions per variant, reporting a confidence
-  //   interval rather than a bare p-value.
-  //
-  //   It must also account for sequential testing. Repeatedly checking an experiment until it looks
-  //   significant inflates false positives badly -- which is why the caveat below is returned in the
-  //   response rather than buried in a doc.
+  // pg returns aggregate sums as strings; coerce before the statistics see them.
+  const stats: VariantStat[] = rows.map((r) => ({
+    variant: r.variant,
+    metric: r.metric,
+    subjects: Number(r.subjects),
+    conversions: Number(r.conversions),
+  }));
+  const significance = buildResults(stats, { baseline, peeks });
+
   return json({
     flag: flagKey,
+    baseline,
+    peeks,
     results: rows,
-    significance: null,
-    caveat:
-      "Significance testing is not yet wired. Treat these numbers as directional only: repeatedly " +
-      "checking an experiment until it looks significant substantially inflates false positives.",
+    significance: significance.comparisons,
+    caveat: significance.note,
   });
 });
 
@@ -337,3 +293,15 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadFlagsConfig, SPEC } from "./config.js";
+export { bucketOf, variantFor } from "./bucketing.js";
+export {
+  erf,
+  normalCdf,
+  twoProportionZTest,
+  waldInterval,
+  sequentialAdjust,
+  buildResults,
+} from "./stats.js";

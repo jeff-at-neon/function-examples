@@ -4,9 +4,9 @@ Deterministically masks personal data in a branch — database and Object Storag
 
 **Block 15 of 25**, numbered in build order.
 
-> **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
-> `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
-> explanation rather than failing in a way that looks like a bug.
+> **Status: implemented.** Schema, safety checks, control flow, and the core logic (deterministic
+> masking with a resumable batched executor behind the branch-name interlock) are all wired, with
+> pure unit tests. Object Storage masking remains out of scope. Still unverified against a live Neon project.
 
 ## Why this block
 

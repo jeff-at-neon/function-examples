@@ -22,7 +22,6 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   NotFoundError,
   parseTriggerEvent,
   problem,
@@ -31,24 +30,10 @@ import {
   type Logger,
 } from "@neon-blocks/core";
 import { StorageClient, detectKind, ObjectNotFoundError } from "@neon-blocks/storage";
+import { loadCsvConfig } from "./config.js";
+import { runImport } from "./import.js";
 
 const log: Logger = createLogger({ block: "csv-import" });
-
-const SPEC = {
-  block: "csv-import",
-  required: ["CSV_BUCKET"],
-  optional: {
-    CSV_PREFIX: "imports/",
-    CSV_REPORT_PREFIX: "import-reports/",
-    CSV_MAX_BYTES: "52428800",
-    CSV_MAX_ROWS: "100000",
-    CSV_ABORT_ON_ERROR: "false",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -59,18 +44,18 @@ router.post("/import", async (request) => {
     return problem(400, "wrong_trigger", `/import expects a storage trigger, got ${event.type}`);
   }
 
-  const cfg = config();
-  if (event.bucketName !== cfg.get("CSV_BUCKET")) {
+  const cfg = loadCsvConfig();
+  if (event.bucketName !== cfg.bucket) {
     return problem(403, "wrong_bucket", "This importer only handles its configured bucket");
   }
 
   // §8: reports are written back to storage, so the output prefix must be disjoint from the watched
   // prefix or every report would retrigger an import of itself.
   assertNoLoop({
-    inputBucket: cfg.get("CSV_BUCKET"),
-    inputPrefix: cfg.get("CSV_PREFIX"),
-    outputBucket: cfg.get("CSV_BUCKET"),
-    outputPrefix: cfg.get("CSV_REPORT_PREFIX"),
+    inputBucket: cfg.bucket,
+    inputPrefix: cfg.prefix,
+    outputBucket: cfg.bucket,
+    outputPrefix: cfg.reportPrefix,
   });
 
   const storage = StorageClient.fromEnv();
@@ -92,26 +77,19 @@ router.post("/import", async (request) => {
     throw err;
   }
 
-  const maxBytes = cfg.int("CSV_MAX_BYTES", { min: 1024 });
-  if (metadata.size > maxBytes) {
-    log.capped("spreadsheet too large to import", { size: metadata.size, maxBytes });
+  if (metadata.size > cfg.maxBytes) {
+    log.capped("spreadsheet too large to import", { size: metadata.size, maxBytes: cfg.maxBytes });
     return json({ ok: true, status: "skipped", reason: "over size limit" });
   }
 
-  // TODO(csv-import): the pipeline below is the remaining work.
-  //   1. parseCsv(body) -- needs an RFC 4180 parser. Naive split(',') corrupts any file with a
-  //      quoted comma, which is most real files. This is the main seam.
-  //   2. validate each row against definitions.column_map, collecting row_errors rather than throwing
-  //   3. COPY valid rows into a staging table
-  //   4. MERGE staging into the target using conflict_keys
-  //   5. write rejected rows as CSV to CSV_REPORT_PREFIX and record report_key
-  // Status transitions are persisted at each step so the reconciler can recognise a stuck import.
-  return problem(
-    501,
-    "not_implemented",
-    "CSV parsing is not yet wired. See the TODO in src/index.ts: an RFC 4180 parser is required, " +
-      "because naive comma splitting corrupts quoted fields.",
+  // Parse (RFC 4180), validate each row against the definition's column map collecting row errors,
+  // upsert the valid rows, and write a rejected-rows report back to storage. The parsing, coercion,
+  // and SQL generation are pure and unit tested; runImport is the thin orchestration.
+  const result = await runImport(
+    { db: getPool(), storage },
+    { event: { bucketName: event.bucketName, objectKey: event.objectKey, etag: metadata.etag }, cfg },
   );
+  return json({ ok: true, ...result });
 });
 
 router.post("/reconcile", async (request) => {
@@ -201,3 +179,10 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadCsvConfig, SPEC } from "./config.js";
+export { parseCsv, csvEscape, toCsv } from "./parse.js";
+export { coerceValue, mapHeaders, validateRow, buildRejectedCsv } from "./coerce.js";
+export { buildInsertSql } from "./merge.js";
+export { runImport, definitionCodeFromKey } from "./import.js";

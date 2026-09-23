@@ -5,7 +5,7 @@
   "summary": "Caches model responses by embedding similarity, so a rephrased question reuses an existing answer.",
   "schema": "blocks_semantic_cache",
   "billing": "free",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres",
     "pgvector",

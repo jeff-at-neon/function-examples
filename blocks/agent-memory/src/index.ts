@@ -10,10 +10,6 @@
  *   POST   /turns                 Append a turn and update the running token total.
  *   GET    /context               Assemble context: summaries, retrieved turns, recent turns.
  *   POST   /compact               Cron. Summarize the oldest turns of oversized sessions.
- *
- * STATUS: scaffold. The schema, safety checks, and control flow are real; the marked TODO seams are
- * the remaining work. Endpoints that are not implemented return 501 with a specific explanation
- * rather than failing in a way that looks like a bug.
  */
 
 import {
@@ -22,7 +18,6 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   NotFoundError,
   parseTriggerEvent,
   problem,
@@ -30,24 +25,13 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
-
+import { defaultChat, defaultEmbeddings } from "@neon-blocks/ai";
+import { loadMemoryConfig } from "./config.js";
+import { estimateTokens } from "./tokens.js";
+import { compactSession, shouldCompact } from "./compact.js";
+import { assembleContext, retrieveContext, selectRetrieved, type RetrievedTurn, type SummaryRow, type TurnRow } from "./context.js";
 
 const log: Logger = createLogger({ block: "agent-memory" });
-
-const SPEC = {
-  block: "agent-memory",
-  optional: {
-    MEMORY_COMPACT_AT_TOKENS: "24000",
-    MEMORY_KEEP_RECENT_TURNS: "10",
-    MEMORY_SUMMARY_MODEL: "gpt-4o-mini",
-    MEMORY_EMBEDDING_MODEL: "text-embedding-3-small",
-    MEMORY_EMBEDDING_DIMENSIONS: "1536",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -77,7 +61,7 @@ router.post("/turns", async (request) => {
   // Caller-supplied when available, else estimated. Four characters per token is wrong for code and
   // for non-Latin scripts; a real tokenizer is the fix and is noted as a limitation.
   const tokenCount =
-    typeof body["tokenCount"] === "number" ? body["tokenCount"] : Math.ceil(content.length / 4);
+    typeof body["tokenCount"] === "number" ? body["tokenCount"] : estimateTokens(content);
 
   const pool = getPool();
 
@@ -101,17 +85,16 @@ router.post("/turns", async (request) => {
   const row = rows[0];
   if (!row) throw new NotFoundError("No such active session");
 
-  const cfg = config();
-  const threshold = cfg.int("MEMORY_COMPACT_AT_TOKENS", { min: 1_000, max: 1_000_000 });
+  const cfg = loadMemoryConfig();
 
-  // TODO(agent-memory): embed this turn for retrieval. Deliberately not inline -- a user-facing turn
-  // should not wait on an embedding call. Queue it, or batch on the /compact schedule.
+  // Turns are embedded on the /compact schedule, not here — a user-facing turn should not wait on an
+  // embedding call.
   return json(
     {
       turnIndex: row.turn_index,
       totalTokens: row.total_tokens,
       // Surfaced so the caller knows compaction is due without querying for it.
-      compactionDue: row.total_tokens > threshold,
+      compactionDue: row.total_tokens > cfg.compactAtTokens,
     },
     { status: 201 },
   );
@@ -121,19 +104,19 @@ router.get("/context", async (_request, ctx) => {
   const sessionId = ctx.url.searchParams.get("session");
   if (!sessionId) throw new ValidationError("?session= is required");
 
-  const cfg = config();
-  const keepRecent = cfg.int("MEMORY_KEEP_RECENT_TURNS", { min: 1, max: 200 });
+  const cfg = loadMemoryConfig();
+  const keepRecent = cfg.keepRecentTurns;
+  const query = ctx.url.searchParams.get("q");
+  const k = Math.min(Math.max(Number(ctx.url.searchParams.get("k") ?? "5"), 1), 50);
   const pool = getPool();
 
-  // Summaries first, then recent verbatim turns. That ordering reconstructs the conversation
-  // chronologically: what happened earlier (compressed), then what happened lately (in full).
-  const { rows: summaries } = await pool.query(
+  const { rows: summaries } = await pool.query<SummaryRow>(
     `SELECT from_turn, to_turn, summary, token_count
      FROM blocks_agent_memory.summaries WHERE session_id = $1 ORDER BY from_turn`,
     [sessionId],
   );
 
-  const { rows: recent } = await pool.query(
+  const { rows: recent } = await pool.query<TurnRow>(
     `SELECT turn_index, role, content, token_count
      FROM blocks_agent_memory.turns
      WHERE session_id = $1 AND NOT is_compacted
@@ -142,18 +125,22 @@ router.get("/context", async (_request, ctx) => {
     [sessionId, keepRecent],
   );
 
-  // TODO(agent-memory): semantic retrieval.
-  //   embed the current query and pull the most relevant COMPACTED turns via <=>, so a detail from
-  //   turn 12 is available at turn 200 without replaying everything. This is the part that keeps an
-  //   agent coherent past a few dozen turns, and it is why compacted turns are retained rather than
-  //   deleted.
-  return json({
-    sessionId,
-    summaries,
-    recentTurns: recent.reverse(),
-    retrievedTurns: [],
-    note: "Semantic retrieval is not yet wired; see the TODO in src/index.ts.",
-  });
+  // Semantic retrieval over COMPACTED turns: a detail from turn 12 is available at turn 200 without
+  // replaying everything, which is why compacted turns are retained rather than deleted. Skipped
+  // when no query is supplied.
+  let retrieved: RetrievedTurn[] = [];
+  if (query) {
+    const embeddings = defaultEmbeddings({ model: cfg.embeddingModel, dimensions: cfg.dimensions });
+    const { vectors } = await embeddings.embed([query]);
+    const embedding = vectors[0];
+    if (embedding) {
+      const candidates = await retrieveContext(pool, { sessionId, queryEmbedding: embedding, k });
+      const recentIndexes = new Set(recent.map((r) => r.turn_index));
+      retrieved = selectRetrieved(candidates, k, recentIndexes);
+    }
+  }
+
+  return json({ sessionId, ...assembleContext({ summaries, retrieved, recent }) });
 });
 
 router.post("/compact", async (request) => {
@@ -163,39 +150,44 @@ router.post("/compact", async (request) => {
     return problem(400, "wrong_trigger", `/compact expects a schedule trigger, got ${event.type}`);
   }
 
-  const cfg = config();
-  const threshold = cfg.int("MEMORY_COMPACT_AT_TOKENS", { min: 1_000, max: 1_000_000 });
+  const cfg = loadMemoryConfig();
+  const pool = getPool();
 
-  // Identifying what needs compaction works; performing it does not. Reported honestly so an
-  // operator can see the backlog rather than assuming it is handled.
-  const { rows } = await getPool().query<{ id: string; total_tokens: number; turn_count: number }>(
-    `SELECT id, total_tokens, turn_count
+  const { rows: sessions } = await pool.query<{
+    id: string;
+    total_tokens: number;
+    turn_count: number;
+    compacted_through_turn: number;
+  }>(
+    `SELECT id, total_tokens, turn_count, compacted_through_turn
      FROM blocks_agent_memory.sessions
      WHERE status = 'active' AND total_tokens > $1 AND turn_count > compacted_through_turn
      ORDER BY total_tokens DESC
      LIMIT 20`,
-    [threshold],
+    [cfg.compactAtTokens],
   );
 
-  // TODO(agent-memory): the compaction pass.
-  //   1. take turns from compacted_through_turn up to (turn_count - MEMORY_KEEP_RECENT_TURNS)
-  //   2. summarize them with MEMORY_SUMMARY_MODEL and insert a summaries row
-  //   3. mark those turns is_compacted -- NOT deleted: a summary is lossy, so the originals are the
-  //      only place a compacted-away detail still exists, and retrieval reads them
-  //   4. advance compacted_through_turn and reduce total_tokens by the difference
-  //
-  //   Never truncate the head instead of summarizing: the first message is usually where the task
-  //   was defined, and dropping it is how an agent forgets what it was asked to do.
+  // Summarize the oldest turns of each oversized session, keeping the most recent verbatim and never
+  // dropping the head (see compactionWindow). The originals are marked compacted, not deleted, so
+  // retrieval can still read a summarized-away detail.
+  const chat = defaultChat({ model: cfg.summaryModel });
+  let compacted = 0;
+  for (const session of sessions) {
+    if (!shouldCompact(session.total_tokens, cfg.compactAtTokens, session.turn_count, session.compacted_through_turn)) {
+      continue;
+    }
+    const result = await compactSession(pool, session, {
+      chat,
+      keepRecentTurns: cfg.keepRecentTurns,
+    });
+    if (result.compacted) compacted++;
+  }
+
   return json({
     ok: true,
     scheduledAt: event.scheduledAt,
-    sessionsNeedingCompaction: rows.length,
-    compacted: 0,
-    note:
-      rows.length > 0
-        ? "Compaction is not yet wired; these sessions will overflow their context window. See the " +
-          "TODO in src/index.ts."
-        : undefined,
+    sessionsConsidered: sessions.length,
+    compacted,
   });
 });
 
@@ -257,3 +249,9 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadMemoryConfig, SPEC } from "./config.js";
+export { estimateTokens } from "./tokens.js";
+export { shouldCompact, compactionWindow, tokenReduction } from "./compact.js";
+export { assembleContext, selectRetrieved } from "./context.js";

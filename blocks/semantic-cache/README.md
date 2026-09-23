@@ -4,9 +4,8 @@ Caches model responses by embedding similarity, so a rephrased question reuses a
 
 **Block 20 of 25**, numbered in build order.
 
-> **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
-> `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
-> explanation rather than failing in a way that looks like a bug.
+> **Status: implemented.** Schema, safety checks, control flow, and the core logic (exact + vector
+> similarity lookup) are all wired, with pure unit tests. Still unverified against a live Neon project.
 
 ## Why this block
 

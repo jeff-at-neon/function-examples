@@ -76,4 +76,5 @@ SELECT
   COALESCE(sum(rows_imported), 0)                        AS rows_imported_total,
   COALESCE(sum(rows_rejected), 0)                        AS rows_rejected_total,
   (SELECT count(*) FROM blocks_csv_import.definitions)   AS definitions_count
+FROM blocks_csv_import.imports
 ;

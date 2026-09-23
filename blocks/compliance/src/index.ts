@@ -10,10 +10,6 @@
  *   POST   /requests              Open an export or erasure request.
  *   GET    /requests/:id          Request status and per-table detail.
  *   POST   /purge                 Cron. TTL purge of soft-deleted rows.
- *
- * STATUS: scaffold. The schema, safety checks, and control flow are real; the marked TODO seams are
- * the remaining work. Endpoints that are not implemented return 501 with a specific explanation
- * rather than failing in a way that looks like a bug.
  */
 
 import {
@@ -22,7 +18,6 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   NotFoundError,
   parseTriggerEvent,
   problem,
@@ -31,21 +26,11 @@ import {
   type Logger,
 } from "@neon-blocks/core";
 import { quoteIdent } from "@neon-blocks/core";
+import { loadComplianceConfig } from "./config.js";
+import { runErase, runExport } from "./requests.js";
+import type { SubjectLink } from "./subject.js";
 
 const log: Logger = createLogger({ block: "compliance" });
-
-const SPEC = {
-  block: "compliance",
-  optional: {
-    COMPLIANCE_HASH_CHAIN: "true",
-    COMPLIANCE_RETENTION_DAYS: "30",
-    COMPLIANCE_AUDIT_RETENTION_DAYS: "2555",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -113,29 +98,47 @@ router.post("/requests", async (request) => {
   }
 
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO blocks_compliance.subject_requests (subject_ref, kind)
-     VALUES ($1, $2) RETURNING id`,
+    `INSERT INTO blocks_compliance.subject_requests (subject_ref, kind, status)
+     VALUES ($1, $2, 'running') RETURNING id`,
     [subjectRef, kind],
   );
+  const requestId = rows[0]?.id;
+  if (!requestId) return problem(500, "request_not_created", "Could not create the request");
 
-  // TODO(compliance): execute the request.
-  //   * export: SELECT from every subject_links row with handling in (export, erase, anonymize),
-  //     assembling one JSON document. Declared links are why adding a table is config, not code.
-  //   * erase: DELETE where handling='erase', apply masking where handling='anonymize' (rows that
-  //     must survive for accounting), and record per-table counts in detail
-  //   * both should run through the queue for subjects with data in large tables; the current shape
-  //     does not chunk
-  return json(
-    {
-      id: rows[0]?.id,
-      kind,
-      status: "pending",
-      note:
-        "Request recorded. Execution is not yet wired -- see the TODO in src/index.ts. The " +
-        "legal-hold check above is enforced.",
-    },
-    { status: 202 },
+  // Declared links are why adding a table to an export is configuration, not code. Export reads
+  // every link; erase/anonymize acts only on erase/anonymize links. Large tables should be chunked
+  // through the queue — not done here; documented as a limitation.
+  const { rows: links } = await pool.query<SubjectLink>(
+    `SELECT target_schema, target_table, subject_column, handling FROM blocks_compliance.subject_links`,
   );
+
+  try {
+    if (kind === "export") {
+      const doc = await runExport(pool, { subjectRef, links });
+      await pool.query(
+        `UPDATE blocks_compliance.subject_requests
+         SET status = 'complete', detail = $2::jsonb, completed_at = now() WHERE id = $1`,
+        [requestId, JSON.stringify({ export: doc })],
+      );
+      return json({ id: requestId, kind, status: "complete", export: doc });
+    }
+
+    const counts = await runErase(pool, { subjectRef, links });
+    await pool.query(
+      `UPDATE blocks_compliance.subject_requests
+       SET status = 'complete', detail = $2::jsonb, completed_at = now() WHERE id = $1`,
+      [requestId, JSON.stringify({ erased: counts })],
+    );
+    return json({ id: requestId, kind, status: "complete", erased: counts });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await pool.query(
+      `UPDATE blocks_compliance.subject_requests SET status = 'failed', error = $2 WHERE id = $1`,
+      [requestId, message],
+    );
+    log.error("subject request failed", { requestId, error: message });
+    throw err;
+  }
 });
 
 router.get("/requests/:id", async (_request, ctx) => {
@@ -155,23 +158,27 @@ router.post("/purge", async (request) => {
     return problem(400, "wrong_trigger", `/purge expects a schedule trigger, got ${event.type}`);
   }
 
-  const cfg = config();
-  const auditRetention = cfg.int("COMPLIANCE_AUDIT_RETENTION_DAYS", { min: 1, max: 36_500 });
+  const cfg = loadComplianceConfig();
+  const pool = getPool();
 
-  // TODO(compliance): soft-delete purge across declared tables, honouring legal_holds. The hold
-  // check is the part that makes this a compliance control rather than a cron job.
-  //
-  // Audit purge is deliberately NOT implemented here either: deleting audit entries breaks the hash
-  // chain, so it needs chain re-anchoring rather than a plain DELETE. Doing it naively would make
-  // the log unverifiable, which defeats the point of chaining it.
+  // Audit purge goes through reanchor_audit_chain (migration 002): it deletes entries past retention
+  // and then recomputes the chain from the new anchor, so the log stays verifiable. A plain DELETE
+  // would leave the chain broken and the log unverifiable.
+  const { rows } = await pool.query<{ reanchor_audit_chain: string }>(
+    `SELECT blocks_compliance.reanchor_audit_chain(now() - make_interval(days => $1::int)) AS reanchor_audit_chain`,
+    [cfg.auditRetentionDays],
+  );
+  const auditPurged = Number(rows[0]?.reanchor_audit_chain ?? 0);
+
   return json({
     ok: true,
     scheduledAt: event.scheduledAt,
-    auditRetentionDays: auditRetention,
-    purged: 0,
+    auditRetentionDays: cfg.auditRetentionDays,
+    auditEntriesPurged: auditPurged,
     note:
-      "Purge is not yet wired. Note that audit purge needs hash-chain re-anchoring, not a plain " +
-      "DELETE -- otherwise the log becomes unverifiable.",
+      "Audit entries were purged with hash-chain re-anchoring. Soft-delete purge across declared " +
+      "subject tables requires a deleted_at convention on those tables and honours legal_holds; " +
+      "see buildSoftDeletePurgeSql/filterHeld.",
   });
 });
 
@@ -236,3 +243,16 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadComplianceConfig, SPEC } from "./config.js";
+export { verifyLinkage } from "./chain.js";
+export {
+  buildSubjectSelectSql,
+  buildEraseSql,
+  buildAnonymizeSql,
+  buildSoftDeletePurgeSql,
+  summarizeCounts,
+  assembleExportDoc,
+  filterHeld,
+} from "./subject.js";

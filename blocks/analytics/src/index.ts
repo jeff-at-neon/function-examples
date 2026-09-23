@@ -13,10 +13,6 @@
  *   POST   /rollup                Cron. Sessionize and aggregate.
  *   GET    /funnel                Ordered-step funnel conversion.
  *   GET    /retention             Cohort retention by week.
- *
- * STATUS: scaffold. The schema, safety checks, and control flow are real; the marked TODO seams are
- * the remaining work. Endpoints that are not implemented return 501 with a specific explanation
- * rather than failing in a way that looks like a bug.
  */
 
 import {
@@ -25,36 +21,24 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   parseTriggerEvent,
   problem,
   Router,
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
-
+import { loadAnalyticsConfig } from "./config.js";
+import { actorStepTimes, buildFunnelSql, computeFunnel } from "./funnel.js";
+import { buildRetentionMatrix, buildRetentionSql, type ActivityCell } from "./retention.js";
 
 const log: Logger = createLogger({ block: "analytics" });
-
-const SPEC = {
-  block: "analytics",
-  optional: {
-    ANALYTICS_SESSION_GAP_MINUTES: "30",
-    ANALYTICS_MAX_BATCH: "1000",
-    ANALYTICS_RETENTION_DAYS: "400",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
 router.post("/track", async (request) => {
   const body = await readJsonObject(request);
-  const cfg = config();
-  const maxBatch = cfg.int("ANALYTICS_MAX_BATCH", { min: 1, max: 10_000 });
+  const cfg = loadAnalyticsConfig();
+  const maxBatch = cfg.maxBatch;
 
   const events = Array.isArray(body["events"]) ? body["events"] : [body];
   if (events.length > maxBatch) {
@@ -118,8 +102,8 @@ router.post("/rollup", async (request) => {
     return problem(400, "wrong_trigger", `/rollup expects a schedule trigger, got ${event.type}`);
   }
 
-  const cfg = config();
-  const gapMinutes = cfg.int("ANALYTICS_SESSION_GAP_MINUTES", { min: 1, max: 1_440 });
+  const cfg = loadAnalyticsConfig();
+  const gapMinutes = cfg.sessionGapMinutes;
   const pool = getPool();
 
   // Sessionization by inactivity gap using a window function. NOT a fixed clock window: a user
@@ -230,27 +214,45 @@ router.get("/funnel", async (_request, ctx) => {
   const stepNames = steps.split(",").map((s) => s.trim()).filter((s) => s !== "");
   if (stepNames.length < 2) throw new ValidationError("A funnel needs at least two steps");
 
-  // TODO(analytics): ordered-step funnel.
-  //   Each step must occur AFTER the previous one for the same actor. A query that merely counts
-  //   actors who did all the steps inflates conversion: someone who checked out before adding to
-  //   cart has not converted through the funnel.
-  //   Shape: lateral joins per step, or min(occurred_at) per (actor, step) with a monotonicity check
-  //   across steps. A conversion window (all steps within N days) should be a parameter.
-  return json({
-    steps: stepNames,
-    results: [],
-    note:
-      "Funnel analysis is not yet wired. See the TODO in src/index.ts -- steps must be ordered per " +
-      "actor, since counting actors who did all steps in any order overstates conversion.",
-  });
+  const cfg = loadAnalyticsConfig();
+  // Optional conversion window: every step must fall within this many days of the first step.
+  const windowParam = Number(ctx.url.searchParams.get("windowDays"));
+  const windowMs =
+    Number.isFinite(windowParam) && windowParam > 0 ? windowParam * 86_400_000 : undefined;
+
+  // Gather each actor's first time per step, then decide progression in-process. The ordering rule
+  // is not delegated to SQL — it is the pure, tested computeFunnel.
+  const { rows } = await getPool().query<{
+    actor_ref: string;
+    event_name: string;
+    first_at: string;
+  }>(buildFunnelSql(), [stepNames, cfg.retentionDays]);
+
+  const byActor = new Map<string, { event_name: string; first_at: string }[]>();
+  for (const r of rows) {
+    const list = byActor.get(r.actor_ref) ?? [];
+    list.push({ event_name: r.event_name, first_at: r.first_at });
+    byActor.set(r.actor_ref, list);
+  }
+  const perActor = [...byActor.values()].map((r) => actorStepTimes(r, stepNames));
+  const counts = computeFunnel(perActor, stepNames.length, windowMs);
+
+  const results = stepNames.map((name, i) => ({
+    step: name,
+    reached: counts[i] ?? 0,
+    conversionFromStart: (counts[0] ?? 0) > 0 ? (counts[i] ?? 0) / (counts[0] ?? 1) : 0,
+    conversionFromPrev: i === 0 ? 1 : (counts[i - 1] ?? 0) > 0 ? (counts[i] ?? 0) / (counts[i - 1] ?? 1) : 0,
+  }));
+
+  return json({ steps: stepNames, ...(windowMs != null ? { windowDays: windowParam } : {}), results });
 });
 
 router.get("/retention", async (_request, ctx) => {
-  const weeks = Math.min(Number(ctx.url.searchParams.get("weeks") ?? "12"), 52);
+  const weeks = Math.min(Math.max(Number(ctx.url.searchParams.get("weeks") ?? "12"), 1), 52);
+  const pool = getPool();
 
-  // Cohort sizes are real; the per-period return rates are the remaining work.
-  const { rows } = await getPool().query(
-    `SELECT cohort_week, count(*) AS cohort_size
+  const { rows: cohortRows } = await pool.query<{ cohort_week: string; cohort_size: string }>(
+    `SELECT cohort_week::text AS cohort_week, count(*) AS cohort_size
      FROM blocks_analytics.actor_cohorts
      WHERE cohort_week >= date_trunc('week', now() - make_interval(weeks => $1::int))::date
      GROUP BY cohort_week
@@ -258,14 +260,21 @@ router.get("/retention", async (_request, ctx) => {
     [weeks],
   );
 
-  // TODO(analytics): the retention matrix. For each cohort, the fraction still active in week 1, 2,
-  // 3... Join actor_cohorts to sessions and bucket by weeks-since-first-seen. A single retention
-  // number hides whether the product is improving, which is the whole reason to compute cohorts.
-  return json({
-    cohorts: rows,
-    matrix: [],
-    note: "Retention rates are not yet wired; cohort sizes above are real.",
-  });
+  const { rows: activityRows } = await pool.query<{
+    cohort_week: string;
+    weeks_since: number;
+    active_actors: string;
+  }>(buildRetentionSql(), [weeks]);
+
+  const cohorts = cohortRows.map((r) => ({ cohortWeek: r.cohort_week, size: Number(r.cohort_size) }));
+  const activity: ActivityCell[] = activityRows.map((r) => ({
+    cohortWeek: r.cohort_week,
+    weeksSince: Number(r.weeks_since),
+    activeActors: Number(r.active_actors),
+  }));
+  const matrix = buildRetentionMatrix(cohorts, activity, weeks);
+
+  return json({ weeks, cohorts, matrix });
 });
 
 router.get("/health", async () => {
@@ -323,3 +332,8 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadAnalyticsConfig, SPEC } from "./config.js";
+export { computeFunnel, actorStepTimes, buildFunnelSql } from "./funnel.js";
+export { weeksSince, buildRetentionMatrix, buildRetentionSql } from "./retention.js";

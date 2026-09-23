@@ -5,7 +5,7 @@
   "summary": "Re-embeds rows whose source text changed, driven by a watermark or the outbox. Fixes pgvector's most common failure mode.",
   "schema": "blocks_embedding_freshness",
   "billing": "free",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres",
     "pgvector",

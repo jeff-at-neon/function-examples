@@ -10,10 +10,6 @@
  *   DELETE /keys/:id              Revoke a key.
  *   POST   /verify                Verify a key and consume rate budget.
  *   POST   /sweep                 Cron. Prune expired windows and idempotency records.
- *
- * STATUS: scaffold. The schema, safety checks, and control flow are real; the marked TODO seams are
- * the remaining work. Endpoints that are not implemented return 501 with a specific explanation
- * rather than failing in a way that looks like a bug.
  */
 
 import {
@@ -22,7 +18,6 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   NotFoundError,
   parseTriggerEvent,
   problem,
@@ -30,23 +25,11 @@ import {
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
-import { createHash, randomBytes } from "node:crypto";
+import { loadApiEdgeConfig } from "./config.js";
+import { generateKey, hashKey } from "./keys.js";
+import { verifyKey } from "./verify.js";
 
 const log: Logger = createLogger({ block: "api-edge" });
-
-const SPEC = {
-  block: "api-edge",
-  optional: {
-    API_KEY_PREFIX: "nb_live",
-    API_RATE_WINDOW_SECONDS: "60",
-    API_DEFAULT_RATE_LIMIT: "1000",
-    API_IDEMPOTENCY_TTL_HOURS: "24",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -54,14 +37,9 @@ router.post("/keys", async (request) => {
   const body = await readJsonObject(request);
   const tenant = requireString(body, "tenant");
   const name = requireString(body, "name");
-  const cfg = config();
+  const cfg = loadApiEdgeConfig();
 
-  // 32 bytes of CSPRNG output. base64url so the key is copy-pasteable without escaping.
-  const secret = randomBytes(32).toString("base64url");
-  const key = `${cfg.get("API_KEY_PREFIX")}_${secret}`;
-  const keyHash = createHash("sha256").update(key).digest("hex");
-  // Long enough to be selective, short enough to be safe to display and log.
-  const keyPrefix = key.slice(0, cfg.get("API_KEY_PREFIX").length + 9);
+  const { key, keyHash, keyPrefix } = generateKey(cfg.keyPrefix);
 
   const scopes = Array.isArray(body["scopes"])
     ? (body["scopes"] as unknown[]).filter((s): s is string => typeof s === "string")
@@ -100,24 +78,33 @@ router.add("DELETE", "/keys/:id", async (_request, ctx) => {
 router.post("/verify", async (request) => {
   const body = await readJsonObject(request);
   const key = requireString(body, "key");
-  const keyHash = createHash("sha256").update(key).digest("hex");
+  const cfg = loadApiEdgeConfig();
 
-  // TODO(api-edge): verification and rate consumption.
-  //   1. SELECT by key_hash (already unique-indexed), checking revoked_at and expires_at
-  //   2. atomically increment the current fixed window:
-  //        INSERT INTO rate_windows (subject, window_start, count) VALUES (...)
-  //        ON CONFLICT (subject, window_start) DO UPDATE SET count = rate_windows.count + 1
-  //        RETURNING count
-  //      One statement, so concurrent requests cannot both read an under-limit count.
-  //   3. compare against rate_limit or API_DEFAULT_RATE_LIMIT and return 429 with Retry-After
-  //   4. update last_used_at (consider throttling this write -- it is one per request otherwise)
-  void keyHash;
-  return problem(
-    501,
-    "not_implemented",
-    "Key verification is not yet wired. See the TODO in src/index.ts. The schema and the atomic " +
-      "window-increment statement are specified there.",
-  );
+  const result = await verifyKey(getPool(), {
+    keyHash: hashKey(key),
+    windowSeconds: cfg.windowSeconds,
+    defaultRateLimit: cfg.defaultRateLimit,
+  });
+
+  if (!result.ok) {
+    if (result.reason === "rate_limited") {
+      return json(
+        { ok: false, error: "rate_limited", limit: result.limit },
+        { status: 429, headers: { "Retry-After": String(result.retryAfter ?? 1) } },
+      );
+    }
+    // unknown / revoked / expired collapse to one opaque 401: a probing client must not be able to
+    // tell a revoked key from one that was never issued.
+    return problem(401, "invalid_key", "The key is missing, revoked, or expired");
+  }
+
+  return json({
+    ok: true,
+    tenant: result.tenant,
+    scopes: result.scopes,
+    rateLimit: result.limit,
+    remaining: result.remaining,
+  });
 });
 
 router.post("/sweep", async (request) => {
@@ -128,7 +115,6 @@ router.post("/sweep", async (request) => {
   }
 
   const pool = getPool();
-  const cfg = config();
 
   // Both tables grow without bound otherwise. This part is complete and worth running on its own.
   const { rowCount: windows } = await pool.query(
@@ -143,7 +129,6 @@ router.post("/sweep", async (request) => {
      WHERE state = 'in_flight' AND created_at < now() - interval '15 minutes'`,
   );
 
-  void cfg;
   return json({
     ok: true,
     scheduledAt: event.scheduledAt,
@@ -207,3 +192,8 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadApiEdgeConfig, SPEC } from "./config.js";
+export { generateKey, hashKey } from "./keys.js";
+export { windowStart, rateDecision, retryAfterSeconds, verifyKey } from "./verify.js";

@@ -5,7 +5,7 @@
   "summary": "Hash-chained audit log, soft delete with TTL purge, and GDPR export and hard-delete.",
   "schema": "blocks_compliance",
   "billing": "meter",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres"
   ],

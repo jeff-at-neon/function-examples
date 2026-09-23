@@ -9,10 +9,6 @@
  *   POST   /rules                 Declare a masking rule for a column.
  *   POST   /run                   Mask this branch. Refuses unless the branch name matches the allow pattern.
  *   GET    /runs                  Masking history for this branch.
- *
- * STATUS: scaffold. The schema, safety checks, and control flow are real; the marked TODO seams are
- * the remaining work. Endpoints that are not implemented return 501 with a specific explanation
- * rather than failing in a way that looks like a bug.
  */
 
 import {
@@ -20,69 +16,18 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   problem,
   Router,
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
-import { createHmac } from "node:crypto";
 import { quoteIdent } from "@neon-blocks/core";
+import { loadAnonymizeConfig } from "./config.js";
+import { isBranchAllowed, runMasking, type Rule } from "./run.js";
 
 const log: Logger = createLogger({ block: "pii-anonymizer" });
 
-const SPEC = {
-  block: "pii-anonymizer",
-  required: ["ANONYMIZE_SALT"],
-  optional: {
-    ANONYMIZE_ALLOW_BRANCH_PATTERN: "^(dev|preview|staging|test)",
-    ANONYMIZE_BATCH_ROWS: "5000",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
-
 const router = new Router();
-
-/**
- * Deterministic masking primitive.
- *
- * HMAC rather than a plain hash: hashing an email is trivially reversible with a dictionary, because
- * there are only so many plausible email addresses. Determinism is deliberate — the same input must
- * always produce the same output, or joins break and a bug that only reproduces for one customer
- * stops reproducing at all.
- */
-export function maskValue(value: string, salt: string, strategy: string): string {
-  const digest = createHmac("sha256", salt).update(value).digest("hex");
-
-  switch (strategy) {
-    case "email":
-      // Format-preserving: a masked email that is not a valid email fails validation and makes the
-      // branch unusable for testing.
-      return `user_${digest.slice(0, 12)}@example.test`;
-    case "phone":
-      // Keeps the +1 555 prefix so number parsers still accept it.
-      return `+1555${parseInt(digest.slice(0, 7), 16) % 10_000_000}`.slice(0, 12);
-    case "name":
-      return `Person ${digest.slice(0, 8)}`;
-    case "address":
-      return `${parseInt(digest.slice(0, 4), 16) % 9999} Test Street`;
-    case "ip":
-      // 203.0.113.0/24 is the reserved documentation range, so a masked IP cannot be a real host.
-      return `203.0.113.${parseInt(digest.slice(0, 2), 16) % 256}`;
-    case "uuid":
-      return [digest.slice(0, 8), digest.slice(8, 12), `4${digest.slice(13, 16)}`,
-              `8${digest.slice(17, 20)}`, digest.slice(20, 32)].join("-");
-    case "redact":
-      return "[REDACTED]";
-    case "null_out":
-      return "";
-    default:
-      return `masked_${digest.slice(0, 16)}`;
-  }
-}
 
 router.post("/rules", async (request) => {
   const body = await readJsonObject(request);
@@ -116,53 +61,70 @@ router.post("/rules", async (request) => {
 
 router.post("/run", async (request) => {
   const body = await readJsonObject(request);
-  const cfg = config();
+  const cfg = loadAnonymizeConfig();
   const pool = getPool();
 
   // The safety interlock, checked before anything else. Masking is destructive and irreversible, and
   // the failure mode is destroying real customer data.
   const branchName = typeof body["branchName"] === "string" ? body["branchName"] : null;
-  const pattern = new RegExp(cfg.get("ANONYMIZE_ALLOW_BRANCH_PATTERN"));
 
-  if (!branchName || !pattern.test(branchName)) {
+  if (!isBranchAllowed(branchName, cfg.allowBranchPattern)) {
     await pool.query(
       `INSERT INTO blocks_pii_anonymizer.runs (branch_name, status, error, finished_at)
        VALUES ($1, 'refused', $2, now())`,
-      [branchName, `branch name does not match ${pattern.source}`],
+      [branchName, `branch name does not match ${cfg.allowBranchPattern}`],
     );
 
     return problem(
       403,
       "refused",
       `Refusing to mask: branch name ${JSON.stringify(branchName)} does not match ` +
-        `ANONYMIZE_ALLOW_BRANCH_PATTERN (${pattern.source}). Masking is irreversible, so this ` +
-        `block will not run anywhere it cannot confirm is non-production.`,
+        `ANONYMIZE_ALLOW_BRANCH_PATTERN (${cfg.allowBranchPattern}). Masking is irreversible, so ` +
+        `this block will not run anywhere it cannot confirm is non-production.`,
     );
   }
 
-  const { rows: rules } = await pool.query<{ id: string }>(
-    `SELECT id FROM blocks_pii_anonymizer.rules WHERE is_active`,
+  const { rows: rules } = await pool.query<Rule>(
+    `SELECT id, target_schema, target_table, target_column, strategy
+     FROM blocks_pii_anonymizer.rules WHERE is_active`,
   );
   if (rules.length === 0) {
     return problem(400, "no_rules", "No active masking rules are declared; there is nothing to mask.");
   }
 
-  // TODO(pii-anonymizer): the masking executor.
-  //   * per rule, UPDATE in batches of ANONYMIZE_BATCH_ROWS so a large table does not hold one
-  //     transaction open for its whole duration
-  //   * apply maskValue() above, which is already deterministic and format-preserving
-  //   * handle composite primary keys when batching
-  //   * record per-rule progress in runs.detail, so a run that dies partway can be resumed --
-  //     a partially masked branch is the most dangerous state, because it looks masked
-  //   * Object Storage is NOT handled: it branches with your data, so documents and images
-  //     containing PII are copied too. That needs the vision and extraction blocks.
-  return problem(
-    501,
-    "not_implemented",
-    `The masking executor is not yet wired (${rules.length} rule(s) are declared). See the TODO ` +
-      `in src/index.ts. maskValue() is implemented and deterministic; the batched UPDATE ` +
-      `generation is the remaining work.`,
+  // Record the run, then execute. Progress is written to runs.detail after every batch so a run
+  // that dies partway is resumable rather than a mystery — a partially masked branch looks masked
+  // but is not. Object Storage is out of scope (see README): it branches with the data too.
+  const { rows: created } = await pool.query<{ id: string }>(
+    `INSERT INTO blocks_pii_anonymizer.runs (branch_name, status) VALUES ($1, 'running') RETURNING id`,
+    [branchName],
   );
+  const runId = created[0]?.id;
+  if (!runId) return problem(500, "run_not_created", "Could not create a run row");
+
+  try {
+    const { rulesApplied, rowsMasked } = await runMasking(pool, {
+      runId,
+      rules,
+      salt: cfg.salt,
+      batchRows: cfg.batchRows,
+    });
+    await pool.query(
+      `UPDATE blocks_pii_anonymizer.runs
+       SET status = 'complete', rules_applied = $2, rows_masked = $3, finished_at = now()
+       WHERE id = $1`,
+      [runId, rulesApplied, rowsMasked],
+    );
+    return json({ ok: true, runId, branchName, rulesApplied, rowsMasked });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await pool.query(
+      `UPDATE blocks_pii_anonymizer.runs SET status = 'failed', error = $2, finished_at = now() WHERE id = $1`,
+      [runId, message],
+    );
+    log.error("masking run failed", { runId, error: message });
+    throw err;
+  }
 });
 
 router.get("/runs", async () => {
@@ -225,3 +187,8 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadAnonymizeConfig, SPEC } from "./config.js";
+export { maskValue } from "./mask.js";
+export { isBranchAllowed, buildUpdateSql, buildSelectBatchSql, mergeProgress, ruleKey } from "./run.js";

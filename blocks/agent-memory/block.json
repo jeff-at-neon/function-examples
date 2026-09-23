@@ -5,7 +5,7 @@
   "summary": "Session transcripts, summarization compaction, and retrieval for LLM agents — so a long conversation stays inside the context window.",
   "schema": "blocks_agent_memory",
   "billing": "free",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres",
     "pgvector",

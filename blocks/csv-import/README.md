@@ -4,9 +4,9 @@ Spreadsheet lands in a bucket, validates into a staging table, merges typed, and
 
 **Block 11 of 25**, numbered in build order.
 
-> **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
-> `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
-> explanation rather than failing in a way that looks like a bug.
+> **Status: implemented.** Schema, safety checks, control flow, and the core logic (RFC 4180 parse,
+> typed coercion with a row-level error report, and upsert) are all wired, with pure unit tests.
+> Still unverified against a live Neon project.
 
 ## Why this block
 

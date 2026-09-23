@@ -9,10 +9,6 @@
  *   POST   /sources               Register a table whose text should stay embedded.
  *   POST   /scan                  Cron. Detect changed rows and queue re-embeds.
  *   GET    /pending               Rows currently known to be stale.
- *
- * STATUS: scaffold. The schema, safety checks, and control flow are real; the marked TODO seams are
- * the remaining work. Endpoints that are not implemented return 501 with a specific explanation
- * rather than failing in a way that looks like a bug.
  */
 
 import {
@@ -21,7 +17,6 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   parseTriggerEvent,
   problem,
   Router,
@@ -29,21 +24,12 @@ import {
   type Logger,
 } from "@neon-blocks/core";
 import { quoteIdent } from "@neon-blocks/core";
+import { defaultEmbeddings } from "@neon-blocks/ai";
+import { loadFreshnessConfig } from "./config.js";
+import { detectChanges, processPending } from "./scan.js";
+import type { FreshnessSource } from "./freshness.js";
 
 const log: Logger = createLogger({ block: "embedding-freshness" });
-
-const SPEC = {
-  block: "embedding-freshness",
-  optional: {
-    FRESHNESS_BATCH_SIZE: "200",
-    FRESHNESS_EMBEDDING_MODEL: "text-embedding-3-small",
-    FRESHNESS_EMBEDDING_DIMENSIONS: "1536",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -97,29 +83,31 @@ router.post("/scan", async (request) => {
     return problem(400, "wrong_trigger", `/scan expects a schedule trigger, got ${event.type}`);
   }
 
-  const { rows: sources } = await getPool().query<{ code: string; updated_column: string | null }>(
-    `SELECT code, updated_column FROM blocks_embedding_freshness.sources WHERE is_active`,
+  const pool = getPool();
+  const cfg = loadFreshnessConfig();
+  const { rows: sources } = await pool.query<FreshnessSource>(
+    `SELECT code, source_schema, source_table, key_column, text_columns, updated_column,
+            vector_schema, vector_table, vector_column, watermark
+     FROM blocks_embedding_freshness.sources
+     WHERE is_active AND updated_column IS NOT NULL`,
   );
 
-  // TODO(embedding-freshness): the scan and re-embed pipeline.
-  //   1. per source, SELECT rows where updated_column > watermark, limited to FRESHNESS_BATCH_SIZE
-  //   2. concatenate text_columns and hash it; compare against embedded_state.content_hash. This
-  //      step is what stops an unrelated column change from paying for a re-embed.
-  //   3. INSERT differing rows into pending
-  //   4. advance the watermark to the highest updated_column actually examined -- not to now(), or
-  //      rows modified during the scan would be skipped forever
-  //   5. embed pending rows in batches, UPDATE the vector column, upsert embedded_state
-  // Outbox mode replaces steps 1-2: consume 'row.changed' events and diff old vs new, which is why
-  // block 1's trigger carries both.
-  void sources;
+  // Watermark-driven scan. Outbox-driven sources (updated_column IS NULL) are handled by the event
+  // consumer, not here. Detection + watermark advance is pure (freshness.ts); the embed is the only
+  // part that touches the model.
+  const embeddings = defaultEmbeddings({ model: cfg.model, dimensions: cfg.dimensions });
+  const results = [];
+  for (const source of sources) {
+    const detected = await detectChanges(pool, source, { batchSize: cfg.batchSize });
+    const processed = await processPending(pool, source, {
+      batchSize: cfg.batchSize,
+      embeddings,
+      model: cfg.model,
+    });
+    results.push({ source: source.code, ...detected, ...processed });
+  }
 
-  return problem(
-    501,
-    "not_implemented",
-    "The freshness scan is not yet wired. See the TODO in src/index.ts -- note step 4: the " +
-      "watermark must advance to the highest row examined, not to now(), or rows modified during " +
-      "the scan are skipped forever.",
-  );
+  return json({ ok: true, scheduledAt: event.scheduledAt, sources: results });
 });
 
 router.get("/pending", async (_request, ctx) => {
@@ -192,3 +180,13 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadFreshnessConfig, SPEC } from "./config.js";
+export {
+  buildRowText,
+  contentHash,
+  nextWatermark,
+  diffRows,
+  buildCandidateSql,
+} from "./freshness.js";
