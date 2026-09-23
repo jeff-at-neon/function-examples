@@ -1,0 +1,130 @@
+{
+  "slug": "chat",
+  "rank": 26,
+  "name": "Chat + Agent Endpoint",
+  "summary": "A streaming chat/agent HTTP endpoint on your branch: SSE token streaming, a bounded tool loop, structured output, and every turn persisted to Postgres.",
+  "schema": "blocks_chat",
+  "billing": "meter",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres",
+    "ai_gateway"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon. Conversations and messages are persisted here so state survives isolate eviction.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_AI_GATEWAY_API_KEY",
+      "description": "AI Gateway credential. Injected automatically by Neon. Used for both the streaming chat call and structured generation, so no per-provider key is needed.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_AI_GATEWAY_URL",
+      "description": "AI Gateway base URL. Injected automatically by Neon. Override only to point at a different OpenAI-compatible endpoint.",
+      "required": false,
+      "injected": true
+    },
+    {
+      "name": "CHAT_MODEL",
+      "description": "Model id used for both /chat and /generate. Routed through the AI Gateway.",
+      "required": false,
+      "default": "gpt-4o-mini"
+    },
+    {
+      "name": "CHAT_MAX_INPUT_TOKENS",
+      "description": "Reject a prompt whose estimated input exceeds this before any model call. The endpoint is public, so this is a denial-of-service guard, not a nicety.",
+      "required": false,
+      "default": "24000"
+    },
+    {
+      "name": "CHAT_MAX_OUTPUT_TOKENS",
+      "description": "Cap on generated tokens per turn. Bounds per-invocation cost.",
+      "required": false,
+      "default": "2048"
+    },
+    {
+      "name": "CHAT_MAX_TOOL_ITERATIONS",
+      "description": "Hard ceiling on model to tool to model iterations in one request. Prevents a runaway agent from burning Capacity-Hours.",
+      "required": false,
+      "default": "6"
+    },
+    {
+      "name": "CHAT_HISTORY_LIMIT",
+      "description": "Most recent turns loaded into context when no external memory is configured. Older turns are truncated, not summarized.",
+      "required": false,
+      "default": "20"
+    },
+    {
+      "name": "CHAT_STREAM_TIMEOUT_MS",
+      "description": "Time budget for the model stream to produce its first byte. Kept under Neon's 15-minute time-to-first-byte ceiling.",
+      "required": false,
+      "default": "120000"
+    },
+    {
+      "name": "CHAT_API_KEY",
+      "description": "Optional shared secret. When set, a request may authenticate with 'Authorization: Bearer <this value>' (constant-time compared). The zero-config way to protect a public endpoint before Neon Auth is wired.",
+      "required": false,
+      "example": "a-long-random-string"
+    },
+    {
+      "name": "NEON_AUTH_BASE_URL",
+      "description": "Neon Auth issuer. Injected when Neon Auth is enabled. When set, a bearer JWT is verified against its JWKS (implementation is a marked TODO seam) and the token subject scopes the conversation.",
+      "required": false,
+      "injected": true
+    },
+    {
+      "name": "CHAT_CORS_ALLOW_ORIGIN",
+      "description": "Origin echoed in CORS headers. Defaults to '*'. Set to your app origin when clients call the function directly.",
+      "required": false,
+      "default": "*"
+    },
+    {
+      "name": "RAG_URL",
+      "description": "Base URL of the rag block (#2). When set, /chat retrieves context from it before calling the model. Unset means retrieval is skipped.",
+      "required": false,
+      "example": "https://<branch>-rag.compute.c-1.us-east-2.aws.neon.tech"
+    },
+    {
+      "name": "SEMANTIC_CACHE_URL",
+      "description": "Base URL of the semantic-cache block (#20). When set, single-shot calls check the cache before the model. Multi-turn chats are not cached.",
+      "required": false,
+      "example": "https://<branch>-semanticcache.compute.c-1.us-east-2.aws.neon.tech"
+    },
+    {
+      "name": "AGENT_MEMORY_URL",
+      "description": "Base URL of the agent-memory block (#21). When set, long conversations get compacted history and turn storage from it instead of the local table.",
+      "required": false,
+      "example": "https://<branch>-agentmemory.compute.c-1.us-east-2.aws.neon.tech"
+    }
+  ],
+  "triggers": [],
+  "operations": [
+    {
+      "id": "chat",
+      "title": "POST /chat",
+      "description": "HTTP, streaming — a chat/agent turn: optional retrieval, model call streamed as SSE, turn persisted",
+      "route": "/chat",
+      "recommended": true
+    },
+    {
+      "id": "generate",
+      "title": "POST /generate",
+      "description": "HTTP — prompt to a validated JSON object (structured output), cache-eligible",
+      "route": "/generate",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
+    }
+  ]
+}

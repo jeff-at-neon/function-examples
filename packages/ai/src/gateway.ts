@@ -10,7 +10,7 @@
  * overriding the base URL.
  */
 
-import { AiError, batched, type ChatMessage, type ChatOptions, type ChatProvider, type ChatResult, type EmbeddingProvider, type EmbeddingResult } from "./provider.js";
+import { AiError, batched, type ChatMessage, type ChatOptions, type ChatProvider, type ChatResult, type ChatStreamChunk, type ChatStreamProvider, type EmbeddingProvider, type EmbeddingResult } from "./provider.js";
 import { isRetryableStatus } from "@neon-blocks/core";
 
 export interface GatewayConfig {
@@ -176,6 +176,40 @@ interface ChatResponse {
   usage?: { prompt_tokens: number; completion_tokens: number };
 }
 
+/**
+ * Map the provider-neutral message shape to the OpenAI-compatible wire shape.
+ *
+ * Shared by the buffered and streaming calls so a change to how content parts are encoded can
+ * never drift between the two.
+ */
+function toWireMessages(messages: readonly ChatMessage[]): unknown[] {
+  return messages.map((m) => ({
+    role: m.role,
+    content:
+      typeof m.content === "string"
+        ? m.content
+        : m.content.map((part) =>
+            part.type === "text"
+              ? { type: "text", text: part.text }
+              : { type: "image_url", image_url: part.imageUrl },
+          ),
+  }));
+}
+
+function chatRequestBody(
+  model: string,
+  messages: readonly ChatMessage[],
+  options: ChatOptions,
+): Record<string, unknown> {
+  return {
+    model,
+    messages: toWireMessages(messages),
+    ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
+    ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+    ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
+  };
+}
+
 export function createGatewayChat(
   config: GatewayConfig,
   opts: { model?: string } = {},
@@ -190,23 +224,7 @@ export function createGatewayChat(
       const response = await postJson<ChatResponse>(
         config,
         "/v1/chat/completions",
-        {
-          model,
-          messages: messages.map((m) => ({
-            role: m.role,
-            content:
-              typeof m.content === "string"
-                ? m.content
-                : m.content.map((part) =>
-                    part.type === "text"
-                      ? { type: "text", text: part.text }
-                      : { type: "image_url", image_url: part.imageUrl },
-                  ),
-          })),
-          ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
-          ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
-          ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
-        },
+        chatRequestBody(model, messages, options),
         options.timeoutMs ?? 120_000,
       );
 
@@ -226,6 +244,130 @@ export function createGatewayChat(
             }
           : {}),
       };
+    },
+  };
+}
+
+/**
+ * Parse an OpenAI-compatible `text/event-stream` chat completion into ChatStreamChunks.
+ *
+ * The timeout guards only the time to the first byte (the request start), not the whole stream:
+ * a Neon Function is long-running and a healthy stream may legitimately run for minutes, so
+ * aborting it on a wall-clock timer would cut off exactly the workload this exists to serve.
+ */
+async function* streamCompletions(
+  config: GatewayConfig,
+  body: Record<string, unknown>,
+  timeoutMs: number,
+): AsyncIterable<ChatStreamChunk> {
+  const doFetch = config.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await doFetch(`${config.baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.apiKey}`,
+        accept: "text/event-stream",
+      },
+      // stream_options.include_usage asks the provider for a final usage frame, which is how a
+      // streamed call still bills correctly.
+      body: JSON.stringify({ ...body, stream: true, stream_options: { include_usage: true } }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new AiError(`AI stream did not start within ${timeoutMs}ms`, undefined, true);
+    }
+    throw new AiError(
+      `AI stream request failed: ${err instanceof Error ? err.message : String(err)}`,
+      undefined,
+      true,
+    );
+  } finally {
+    // The stream body outlives the connect timer; clearing it here is correct because the fetch
+    // has already resolved (or thrown) by now.
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    throw new AiError(
+      `AI stream failed with ${response.status}: ${detail}`,
+      response.status,
+      isRetryableStatus(response.status),
+    );
+  }
+  if (!response.body) throw new AiError("AI stream response had no body", undefined, true);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line.startsWith("data:")) continue;
+
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") return;
+
+      let parsed: {
+        choices?: { delta?: { content?: string }; finish_reason?: string | null }[];
+        usage?: { prompt_tokens: number; completion_tokens: number } | null;
+      };
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        // A partial or non-JSON keepalive line: skip it rather than tearing down the stream.
+        continue;
+      }
+
+      const choice = parsed.choices?.[0];
+      const delta = choice?.delta?.content;
+      const finishReason = choice?.finish_reason ?? undefined;
+      const usage = parsed.usage
+        ? { promptTokens: parsed.usage.prompt_tokens, completionTokens: parsed.usage.completion_tokens }
+        : undefined;
+
+      if (delta !== undefined || finishReason !== undefined || usage !== undefined) {
+        yield {
+          ...(delta !== undefined ? { delta } : {}),
+          ...(finishReason !== undefined ? { finishReason } : {}),
+          ...(usage !== undefined ? { usage } : {}),
+        };
+      }
+    }
+  }
+}
+
+/**
+ * Streaming chat over the AI Gateway.
+ *
+ * The streaming counterpart to createGatewayChat, kept as a separate provider so a block opts into
+ * streaming explicitly. This is the call a chat/agent Function uses to hold a response open and
+ * emit tokens as they arrive.
+ */
+export function createGatewayChatStream(
+  config: GatewayConfig,
+  opts: { model?: string } = {},
+): ChatStreamProvider {
+  const model = opts.model ?? "gpt-4o-mini";
+
+  return {
+    name: "neon-ai-gateway",
+    model,
+    stream(messages: readonly ChatMessage[], options: ChatOptions = {}): AsyncIterable<ChatStreamChunk> {
+      return streamCompletions(config, chatRequestBody(model, messages, options), options.timeoutMs ?? 120_000);
     },
   };
 }

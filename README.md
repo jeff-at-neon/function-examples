@@ -9,9 +9,10 @@ npx neon-blocks add queue
 npx neon-blocks add rag
 ```
 
-> **Status: all 24 blocks implemented, with 423 unit tests.** Every block has real schemas, safety
-> checks, migrations, and implemented logic. Migrations have been applied, rolled back, re-applied,
-> and every `v_status` view queried against a live Neon branch. The handler logic that calls
+> **Status: 24 blocks implemented, plus the chat endpoint (#26) at scaffold depth.** Every
+> implemented block has real schemas, safety checks, migrations, and logic. Migrations have been
+> applied, rolled back, re-applied, and every `v_status` view queried against a live Neon branch.
+> The handler logic that calls
 > external services (AI Gateway, Object Storage, an image codec) is unit-tested at its pure seams;
 > those live round-trips are not yet exercised end to end.
 
@@ -74,6 +75,7 @@ how far each has been taken, not final intent.
 | 23 | [image-derivatives](blocks/image-derivatives) | implemented | Object Storage | meter |
 | 24 | [analytics](blocks/analytics) | implemented | — | free |
 | 25 | [db-health](blocks/db-health) | implemented | Branching | free |
+| 26 | [chat](blocks/chat) | scaffold | AI Gateway, Auth | meter |
 
 "implemented" means the core logic is written and unit tested. Blocks whose logic calls an
 external service (AI Gateway, Object Storage, an image codec, a parent-branch connection) keep
@@ -98,7 +100,7 @@ upload → file-registry  (Object Storage + SQL index)
 
 ```
 packages/     shared runtime — core, events, queue, storage, ai, migrate, cli
-blocks/       the 24 blocks, each self-contained
+blocks/       the 25 blocks, each self-contained
 docs/         conventions, verified platform facts, row-event migration plan
 scripts/      doctor (env preflight), scaffold generator, CI migration verifier
 ```
@@ -113,7 +115,7 @@ enforces the conventions across every block regardless.
 
 ```bash
 npm install
-npm run typecheck                                  # all 7 packages + 24 blocks, in dependency order
+npm run typecheck                                  # all 7 packages + 25 blocks, in dependency order
 npm test                                           # 240 unit tests, no database required
 node packages/cli/bin/neon-blocks.mjs verify       # enforce docs/CONVENTIONS.md
 node packages/cli/bin/neon-blocks.mjs list         # the catalog
@@ -124,7 +126,7 @@ Unit tests are deliberately pure, so `npm test` works offline and fast.
 ## Testing against a real Neon database
 
 The SQL has never been executed, so this is the highest-value thing to run. Only `DATABASE_URL` is
-needed to exercise all 24 blocks' migrations.
+needed to exercise all 25 blocks' migrations.
 
 ```bash
 cp .env.example .env         # then fill in DATABASE_URL
@@ -151,7 +153,7 @@ neon connection-string blocks-test
 Then run the verification:
 
 ```bash
-node scripts/ci-migrate.mjs apply             # apply all 24 blocks in dependency order
+node scripts/ci-migrate.mjs apply             # apply all 25 blocks in dependency order
 node scripts/ci-migrate.mjs verify-rollback   # prove every migration reverses
 node scripts/ci-migrate.mjs check-views       # query every v_status
 ```

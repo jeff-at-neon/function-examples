@@ -56,6 +56,32 @@ export interface ChatProvider {
   chat(messages: readonly ChatMessage[], opts?: ChatOptions): Promise<ChatResult>;
 }
 
+/**
+ * One chunk of a streamed completion.
+ *
+ * Content arrives as `delta` fragments; the final chunk carries `finishReason` and, when the
+ * provider reports it, cumulative `usage`. A chunk may carry only usage (no delta), so callers
+ * concatenate `delta` where present and read `usage`/`finishReason` when they appear.
+ */
+export interface ChatStreamChunk {
+  delta?: string;
+  finishReason?: string;
+  usage?: { promptTokens: number; completionTokens: number };
+}
+
+/**
+ * Streaming counterpart to ChatProvider.
+ *
+ * Kept separate from `chat()` because a streaming call has a different shape (an async iterable
+ * rather than a resolved result) and a different failure mode: the request can succeed and then
+ * fail mid-stream. Functions are long-running, so this is the path a chat/agent endpoint uses.
+ */
+export interface ChatStreamProvider {
+  readonly name: string;
+  readonly model: string;
+  stream(messages: readonly ChatMessage[], opts?: ChatOptions): AsyncIterable<ChatStreamChunk>;
+}
+
 export class AiError extends Error {
   override readonly name = "AiError";
   constructor(

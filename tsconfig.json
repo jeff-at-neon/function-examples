@@ -36,6 +36,9 @@
       "path": "blocks/billing"
     },
     {
+      "path": "blocks/chat"
+    },
+    {
       "path": "blocks/compliance"
     },
     {
