@@ -234,6 +234,15 @@ export function autoMigrate(opts: {
         const dir =
           typeof opts.migrationsUrl === "string" ? opts.migrationsUrl : fileURLToPath(opts.migrationsUrl);
         const migrations = await loadMigrations(dir);
+        // Every block ships at least one migration, so finding none means the migrations directory
+        // was not packaged with the artifact (or resolved to the wrong path). Fail loudly rather
+        // than silently deploying a handler with no schema.
+        if (migrations.length === 0) {
+          throw new Error(
+            `autoMigrate("${opts.block}"): no migrations found at ${dir}. The migrations/ directory ` +
+              `must ship inside the artifact next to index.mjs.`,
+          );
+        }
         await applyMigrations(getPool(), opts.block, migrations);
       })().catch((err) => {
         // Reset so a transient failure (e.g. the database briefly unreachable) retries next request
