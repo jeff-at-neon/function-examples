@@ -40,6 +40,14 @@ jobs:
       - name: Unit tests
         run: npx vitest run
 
+      - name: Build and validate the function registry
+        # Regenerate the registry (registry.json + per-template template.json) from each block's
+        # manifest and validate it against schemas/{registry,template}.schema.json. The registry is
+        # what the console GUI and the deploy CLI read, so a schema break must fail here.
+        run: |
+          node scripts/build-registry.mjs
+          node scripts/validate-registry.mjs
+
       - name: Confirm scaffolds are in sync with their specs
         # Blocks 11-25 are generated. If someone edits a generated file by hand instead of its spec,
         # the next regeneration silently discards the change -- so catch the divergence here.

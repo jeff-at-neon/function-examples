@@ -61,11 +61,20 @@ jobs:
         # regression in either is invisible until someone deploys.
         run: node scripts/verify-release.mjs
 
+      - name: Build and validate the function registry
+        # The canonical catalog surface (registry.json + per-template template.json) the console GUI
+        # and deploy CLI read. Served as a static tree; retained as a build artifact here.
+        run: |
+          node scripts/build-registry.mjs
+          node scripts/validate-registry.mjs
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: catalog-${{ steps.version.outputs.value }}
-          path: dist-release/
+          path: |
+            dist-release/
+            dist-registry/
           retention-days: 90
 
       # Tag pushes publish. The catalog.json and tarballs become the URLs the console fetches.

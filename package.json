@@ -18,6 +18,8 @@
     "test:watch": "vitest",
     "lint": "tsc --build && vitest run --passWithNoTests",
     "blocks": "node packages/cli/bin/neon-blocks.mjs",
+    "registry": "node scripts/build-registry.mjs",
+    "registry:check": "node scripts/build-registry.mjs && node scripts/validate-registry.mjs",
     "clean": "tsc --build --clean"
   },
   "devDependencies": {
