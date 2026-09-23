@@ -61,8 +61,9 @@ The generator emits a servable tree (base URL = registry root):
   "description": "Postgres-backed job queue and event outbox: retries, backoff, DLQ, idempotency, concurrency caps.",
   "dependencies": ["pg@8.23.0"],
   "environment": [
-    { "name": "NEON_BLOCKS_TRIGGER_SECRET", "description": "Shared secret appended to trigger paths as ?secret=. …" },
-    { "name": "QUEUE_BATCH_SIZE", "description": "Jobs claimed per invocation. …" }
+    { "name": "DATABASE_URL", "description": "Branch connection string.", "required": true, "injected": true, "secret": true },
+    { "name": "NEON_BLOCKS_TRIGGER_SECRET", "description": "Shared secret appended to trigger paths as ?secret=. …", "required": false, "secret": true, "example": "a-long-random-string" },
+    { "name": "QUEUE_BATCH_SIZE", "description": "Jobs claimed per invocation. …", "required": false, "default": "25" }
   ],
   "operations": [
     { "id": "work",    "title": "POST /work",    "description": "cron, every minute — drain the outbox, then run due jobs", "source": "index.js", "route": "/work",   "recommended": true },
@@ -78,8 +79,17 @@ The generator emits a servable tree (base URL = registry root):
 - **`dependencies`** — external runtime deps the deployed function needs, pinned to an exact
   version (no ranges). The `@neon-blocks/*` workspace packages are bundled into `index.js` and are
   **not** listed; today the only external dep is `pg`.
-- **`environment`** — user-configurable variables only, as `{name, description}`. Neon-injected
-  variables (`DATABASE_URL`, `NEON_STORAGE_*`, `NEON_AI_GATEWAY_*`) are omitted.
+- **`environment`** — every variable the function reads, carrying everything a deploy form needs:
+  - `name`, `description` (always present).
+  - `required` (always present) — whether the form must collect a value.
+  - `injected` — supplied automatically by Neon (`DATABASE_URL`, `NEON_STORAGE_*`,
+    `NEON_AI_GATEWAY_*`). The form must **not** prompt for these; show them as provided. Injected
+    variables are never `required` of the user.
+  - `secret` — render as a secret input; never echo the value.
+  - `default` — prefill for an optional variable. `example` — placeholder only, not a default.
+
+  A deploy form therefore prompts for `{ !injected }` variables, marks the `required` ones, uses
+  `secret` inputs where set, and prefills `default`.
 - **`operations`** — the block's routes as selectable units. All operations share one `source`
   (`index.js`, the bundled handler); they differ by `route`. Every template has **at least one**
   `recommended: true` operation; `/health` is the only consistently non-recommended one. A UI
@@ -104,12 +114,13 @@ node scripts/validate-registry.mjs   # validates registry.json + every template.
 the release pipeline publishes it. Because it is generated from each block's `block.json`, it never
 drifts from source.
 
-## Known limitation (install forms)
+## Deploy form
 
-The supplied `template.schema.json` `environment` is `{name, description}` only — it intentionally
-drops `required` / `default` / `injected` / `secret`. That is enough to render **docs** and a bare
-variable list, but **not a full install form**, and the CLI cannot know which vars to prompt for
-versus inject. The richer per-variable config still lives in `build-release.mjs`'s `catalog.json`.
-Wiring a real install form (GUI) or prompt/inject flow (CLI) will need either an extension to the
-template schema or a sidecar carrying that metadata. Tracked as the next decision for the
-CLI-deploy and GUI passes.
+`template.json` carries enough for a full deploy form. The GUI should:
+
+1. Fetch `template.json`, read `environment`.
+2. Show non-`injected` variables as form fields; mark `required` ones; use a secret input where
+   `secret` is true; prefill `default` and use `example` as the placeholder.
+3. Show `injected` variables (e.g. `DATABASE_URL`) as "provided by Neon" — never a prompt.
+4. Let the user select which `operations` to enable (default-check `recommended`), and surface
+   `dependencies` and the migrations under `<id>/migrations/` as what the install will run.

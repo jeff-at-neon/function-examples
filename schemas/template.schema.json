@@ -24,11 +24,31 @@
 			"type": "array",
 			"items": {
 				"type": "object",
-				"required": ["name", "description"],
+				"required": ["name", "description", "required"],
 				"additionalProperties": false,
 				"properties": {
 					"name": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$" },
-					"description": { "type": "string", "minLength": 1 }
+					"description": { "type": "string", "minLength": 1 },
+					"required": {
+						"type": "boolean",
+						"description": "Whether the install form must collect a value. Injected variables are never required of the user."
+					},
+					"secret": {
+						"type": "boolean",
+						"description": "Render as a secret input and never echo the value. Defaults to false."
+					},
+					"injected": {
+						"type": "boolean",
+						"description": "Supplied automatically by Neon (DATABASE_URL, storage, AI gateway). The form must NOT prompt for these; show them as provided. Defaults to false."
+					},
+					"default": {
+						"type": "string",
+						"description": "Prefilled default for an optional variable."
+					},
+					"example": {
+						"type": "string",
+						"description": "Illustrative value for the form's placeholder. Not a default."
+					}
 				}
 			}
 		},
