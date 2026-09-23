@@ -223,19 +223,41 @@ export function createGatewayChat(
   config: GatewayConfig,
   opts: { model?: string } = {},
 ): ChatProvider {
-  const model = opts.model ?? "gpt-4o-mini";
+  const model = opts.model ?? "gpt-5-mini";
 
   return {
     name: "neon-ai-gateway",
     model,
 
     async chat(messages: readonly ChatMessage[], options: ChatOptions = {}): Promise<ChatResult> {
-      const response = await postJson<ChatResponse>(
-        config,
-        "/v1/chat/completions",
-        chatRequestBody(model, messages, options),
-        options.timeoutMs ?? 120_000,
-      );
+      const send = (opts: ChatOptions) =>
+        postJson<ChatResponse>(
+          config,
+          "/v1/chat/completions",
+          chatRequestBody(model, messages, opts),
+          opts.timeoutMs ?? 120_000,
+        );
+
+      let response: ChatResponse;
+      try {
+        response = await send(options);
+      } catch (err) {
+        // Some gateway models (notably the gpt-5 family) reject any non-default temperature:
+        // "'temperature' does not support 0.0 with this model. Only the default (1) value is
+        // supported." Rather than fail, retry once without it — the model uses its default. We keep
+        // sending temperature normally so models that DO honor it still get the requested value.
+        if (
+          options.temperature !== undefined &&
+          err instanceof AiError &&
+          err.status === 400 &&
+          /temperature/i.test(err.message)
+        ) {
+          const { temperature: _dropped, ...withoutTemperature } = options;
+          response = await send(withoutTemperature);
+        } else {
+          throw err;
+        }
+      }
 
       const choice = response.choices[0];
       if (!choice) throw new AiError("Chat provider returned no choices", undefined, true);
@@ -370,7 +392,7 @@ export function createGatewayChatStream(
   config: GatewayConfig,
   opts: { model?: string } = {},
 ): ChatStreamProvider {
-  const model = opts.model ?? "gpt-4o-mini";
+  const model = opts.model ?? "gpt-5-mini";
 
   return {
     name: "neon-ai-gateway",
