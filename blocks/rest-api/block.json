@@ -1,0 +1,72 @@
+{
+  "slug": "rest-api",
+  "rank": 27,
+  "name": "REST API",
+  "summary": "Create, read, update, and delete rows over HTTP",
+  "schema": "blocks_rest_api",
+  "billing": "free",
+  "depth": "implemented",
+  "capabilities": [
+    "postgres"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon. The API reads and writes its own blocks_rest_api.todos table here.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "REST_API_PAGE_SIZE",
+      "description": "Default and maximum number of rows returned by GET /todos. Bounds the response so a large table cannot produce an unbounded payload.",
+      "required": false,
+      "default": "50"
+    }
+  ],
+  "triggers": [],
+  "operations": [
+    {
+      "id": "list-todos",
+      "title": "GET /todos",
+      "description": "HTTP — list todos, newest first, paginated by ?limit and ?offset",
+      "route": "/todos",
+      "recommended": true
+    },
+    {
+      "id": "create-todo",
+      "title": "POST /todos",
+      "description": "HTTP — create a todo from a JSON body",
+      "route": "/todos",
+      "recommended": true
+    },
+    {
+      "id": "get-todo",
+      "title": "GET /todos/:id",
+      "description": "HTTP — fetch one todo by id",
+      "route": "/todos/:id",
+      "recommended": true
+    },
+    {
+      "id": "update-todo",
+      "title": "PATCH /todos/:id",
+      "description": "HTTP — partially update a todo's title or done flag",
+      "route": "/todos/:id",
+      "recommended": true
+    },
+    {
+      "id": "delete-todo",
+      "title": "DELETE /todos/:id",
+      "description": "HTTP — delete a todo by id",
+      "route": "/todos/:id",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
+    }
+  ]
+}

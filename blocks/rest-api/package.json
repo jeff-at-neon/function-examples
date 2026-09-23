@@ -1,0 +1,12 @@
+{
+  "name": "@neon-blocks/block-rest-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neon Block: a CRUD REST API on Postgres.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@neon-blocks/core": "0.1.0"
+  }
+}
