@@ -25,7 +25,7 @@ import {
   json,
   loadConfig,
   NotFoundError,
-  parseTriggerEvent,
+  parseTriggerRequest,
   problem,
   Router,
   ValidationError,
@@ -188,7 +188,7 @@ router.post("/events", async (request) => {
 
 router.post("/send", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/send expects a schedule trigger, got ${event.type}`);
   }

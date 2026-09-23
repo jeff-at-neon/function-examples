@@ -23,7 +23,7 @@ import {
   Router,
   ValidationError,
   assertTriggerAuthentic,
-  parseTriggerEvent,
+  parseTriggerRequest,
   problem,
   type Logger,
   type Queryable,
@@ -229,7 +229,7 @@ router.post("/usage", async (request) => {
 
 router.post("/sweep", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/sweep expects a schedule trigger, got ${event.type}`);
   }

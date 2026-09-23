@@ -22,7 +22,7 @@ import {
   createLogger,
   getPool,
   json,
-  parseTriggerEvent,
+  parseTriggerRequest,
   problem,
   Router,
   ValidationError,
@@ -67,7 +67,7 @@ const router = new Router();
 
 router.post("/work", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/work expects a schedule trigger, got ${event.type}`);
   }
@@ -105,7 +105,7 @@ router.post("/work", async (request) => {
 
 router.post("/sweep", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/sweep expects a schedule trigger, got ${event.type}`);
   }

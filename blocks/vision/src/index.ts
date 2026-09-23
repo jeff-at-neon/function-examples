@@ -22,7 +22,7 @@ import {
   getPool,
   json,
   loadConfig,
-  parseTriggerEvent,
+  parseTriggerRequest,
   problem,
   Router,
   ValidationError,
@@ -87,7 +87,7 @@ const router = new Router();
 
 router.post("/analyze", async (request) => {
   assertTriggerAuthentic(request, { requireSecret: false });
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "storage_object_created") {
     return problem(400, "wrong_trigger", `/analyze expects a storage trigger, got ${event.type}`);
   }
@@ -109,7 +109,7 @@ router.post("/analyze", async (request) => {
 
 router.post("/reconcile", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/reconcile expects a schedule trigger, got ${event.type}`);
   }

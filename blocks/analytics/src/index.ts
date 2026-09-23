@@ -21,7 +21,7 @@ import {
   createLogger,
   getPool,
   json,
-  parseTriggerEvent,
+  parseTriggerRequest,
   problem,
   Router,
   ValidationError,
@@ -98,7 +98,7 @@ router.post("/track", async (request) => {
 
 router.post("/rollup", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/rollup expects a schedule trigger, got ${event.type}`);
   }

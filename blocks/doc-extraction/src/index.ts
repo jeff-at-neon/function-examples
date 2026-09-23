@@ -24,7 +24,7 @@ import {
   getPool,
   json,
   NotFoundError,
-  parseTriggerEvent,
+  parseTriggerRequest,
   problem,
   Router,
   ValidationError,
@@ -59,7 +59,7 @@ router.post("/schemas", async (request) => {
 
 router.post("/extract", async (request) => {
   assertTriggerAuthentic(request, { requireSecret: false });
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "storage_object_created") {
     return problem(400, "wrong_trigger", `/extract expects a storage trigger, got ${event.type}`);
   }
@@ -119,7 +119,7 @@ router.post("/extract", async (request) => {
 
 router.post("/reconcile", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/reconcile expects a schedule trigger, got ${event.type}`);
   }

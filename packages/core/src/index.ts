@@ -11,6 +11,7 @@ export {
   TRIGGER_ID_HEADER,
   TRIGGER_SECRET_ENV,
   parseTriggerEvent,
+  parseTriggerRequest,
   assertSafeObjectKey,
   assertTriggerAuthentic,
   assertNoLoop,

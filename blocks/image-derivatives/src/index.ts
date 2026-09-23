@@ -31,7 +31,7 @@ import {
   getPool,
   json,
   NotFoundError,
-  parseTriggerEvent,
+  parseTriggerRequest,
   problem,
   Router,
   ValidationError,
@@ -157,7 +157,7 @@ router.get("/i/:key", async (_request, ctx) => {
 
 router.post("/reconcile", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/reconcile expects a schedule trigger, got ${event.type}`);
   }

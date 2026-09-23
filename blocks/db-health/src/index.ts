@@ -25,7 +25,7 @@ import {
   createLogger,
   getPool,
   json,
-  parseTriggerEvent,
+  parseTriggerRequest,
   problem,
   Router,
   ValidationError,
@@ -42,7 +42,7 @@ const router = new Router();
 
 router.post("/snapshot", async (request) => {
   assertTriggerAuthentic(request);
-  const event = parseTriggerEvent(await request.json(), request.headers);
+  const event = await parseTriggerRequest(request);
   if (event.type !== "schedule") {
     return problem(400, "wrong_trigger", `/snapshot expects a schedule trigger, got ${event.type}`);
   }
