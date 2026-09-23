@@ -1,0 +1,70 @@
+name: Deploy registry to Pages
+
+# Publishes the function registry (registry.json + per-template template.json,
+# index.mjs, migrations, and <id>.zip) to GitHub Pages, which serves static files
+# over HTTPS with open CORS (Access-Control-Allow-Origin: *) — the surface a
+# browser console needs to fetch the catalog and each deployable zip cross-origin.
+#
+# The published tree is inert and credential-free (env/secrets are never bundled;
+# they go in the deploy API's `environment` field), so serving it publicly is safe.
+
+on:
+  # Publish on every push to the default branch and on a tagged release.
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  # Manual runs (only available once this file is on the default branch).
+  workflow_dispatch:
+
+# Pages needs these; contents:read is enough since we build from source.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One in-flight deploy at a time; a newer push supersedes an older run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and validate the registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the Neon Functions runtime the bundles target.
+          node-version: "24"
+          cache: npm
+
+      - run: npm ci
+
+      # build-registry imports the compiled CLI (discoverBlocks); build it (and its
+      # deps) first. esbuild + the `zip` CLI are already present on the runner.
+      - name: Build the CLI
+        run: npx tsc --build packages/cli
+
+      - name: Build and validate the registry
+        run: |
+          node scripts/build-registry.mjs
+          node scripts/validate-registry.mjs
+
+      - name: Upload the registry as a Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-registry
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
