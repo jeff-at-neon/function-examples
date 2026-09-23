@@ -41,7 +41,7 @@ const SPEC = {
   required: ["VISION_BUCKET"],
   optional: {
     VISION_PREFIX: "uploads/",
-    VISION_MODEL: "gpt-4o-mini",
+    VISION_MODEL: "gpt-5-mini",
     VISION_OUTPUTS: "tags,caption,altText,ocr",
     VISION_MAX_TAGS: "12",
     VISION_MAX_BYTES: "20971520",

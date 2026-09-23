@@ -67,7 +67,7 @@
       "name": "MODERATION_MODEL",
       "description": "Vision-capable model for image classification.",
       "required": false,
-      "default": "gpt-4o-mini"
+      "default": "gpt-5-mini"
     },
     {
       "name": "MODERATION_THRESHOLDS",

@@ -51,7 +51,7 @@ neon triggers create --function-slug doc-extraction --name doc-extraction-reconc
 |---|---|---|
 | `EXTRACT_BUCKET` | *required* | Bucket to watch for documents. |
 | `EXTRACT_PREFIX` | `documents/` | Watched key prefix. |
-| `EXTRACT_MODEL` | `gpt-4o-mini` | Vision-capable model. Must accept image input. |
+| `EXTRACT_MODEL` | `gpt-5-mini` | Vision-capable model. Must accept image input. |
 | `EXTRACT_CONFIDENCE_THRESHOLD` | `0.8` | Fields below this confidence queue for human review. Measure against your own corpus before trusting a value; model confidence is uncalibrated. |
 | `EXTRACT_MAX_BYTES` | `20971520` | Largest document to process. |
 | `NEON_BLOCKS_TRIGGER_SECRET` | `` | Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs. |

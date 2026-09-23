@@ -61,7 +61,7 @@
       "name": "EXTRACT_MODEL",
       "description": "Vision-capable model. Must accept image input.",
       "required": false,
-      "default": "gpt-4o-mini"
+      "default": "gpt-5-mini"
     },
     {
       "name": "EXTRACT_CONFIDENCE_THRESHOLD",

@@ -91,7 +91,7 @@ shape is a `TODO` seam — pass a stricter validator to `validateStructured`.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `CHAT_MODEL` | `gpt-4o-mini` | Model id for both routes, routed through the AI Gateway. |
+| `CHAT_MODEL` | `gpt-5-mini` | Model id for both routes, routed through the AI Gateway. |
 | `CHAT_MAX_INPUT_TOKENS` | `24000` | Reject a larger prompt before any model call. A DoS guard on a public endpoint. |
 | `CHAT_MAX_OUTPUT_TOKENS` | `2048` | Cap on generated tokens per turn. |
 | `CHAT_MAX_TOOL_ITERATIONS` | `6` | Hard ceiling on the (seam) tool loop. |

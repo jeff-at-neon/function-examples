@@ -12,7 +12,7 @@ export const SPEC = {
   block: "chat",
   required: ["DATABASE_URL"],
   optional: {
-    CHAT_MODEL: "gpt-4o-mini",
+    CHAT_MODEL: "gpt-5-mini",
     CHAT_MAX_INPUT_TOKENS: "24000",
     CHAT_MAX_OUTPUT_TOKENS: "2048",
     CHAT_MAX_TOOL_ITERATIONS: "6",

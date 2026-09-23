@@ -52,7 +52,7 @@ neon triggers create --function-slug moderation --name moderation-reconcile \
 | `MODERATION_BUCKET` | *required* | Bucket to watch for uploads. |
 | `MODERATION_PREFIX` | `uploads/` | Watched key prefix. |
 | `MODERATION_QUARANTINE_PREFIX` | `quarantine/` | Prefix quarantined objects move to. Must be disjoint from the watched prefix, or moving an object retriggers moderation of itself. |
-| `MODERATION_MODEL` | `gpt-4o-mini` | Vision-capable model for image classification. |
+| `MODERATION_MODEL` | `gpt-5-mini` | Vision-capable model for image classification. |
 | `MODERATION_THRESHOLDS` | `{"adult":0.5,"violence":0.6,"self_harm":0.4,"hate":0.4,"harassment":0.6}` | Per-category block thresholds as JSON, e.g. {"adult":0.5,"violence":0.7}. Strict by default: permissive defaults create a false belief that content was checked. |
 | `NEON_BLOCKS_TRIGGER_SECRET` | `` | Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs. |
 

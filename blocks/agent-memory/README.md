@@ -47,7 +47,7 @@ neon triggers create --function-slug agent-memory --name agent-memory-compact \
 |---|---|---|
 | `MEMORY_COMPACT_AT_TOKENS` | `24000` | Running token total at which the oldest turns are summarized. Should sit well below your model's window, leaving room for retrieval and the response. |
 | `MEMORY_KEEP_RECENT_TURNS` | `10` | Turns always kept verbatim, never compacted. Recent exchanges carry the most relevant detail. |
-| `MEMORY_SUMMARY_MODEL` | `gpt-4o-mini` | Model used to summarize compacted turns. |
+| `MEMORY_SUMMARY_MODEL` | `gpt-5-mini` | Model used to summarize compacted turns. |
 | `MEMORY_EMBEDDING_MODEL` | `text-embedding-3-small` | Must stay consistent, or retrieval across a session is comparing incomparable vectors. |
 | `MEMORY_EMBEDDING_DIMENSIONS` | `1536` | Must match the model and the vector column width. |
 | `NEON_BLOCKS_TRIGGER_SECRET` | `` | Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs. |

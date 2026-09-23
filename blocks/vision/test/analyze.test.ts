@@ -177,7 +177,7 @@ describe("parseAnalysis", () => {
         dominantColors: ["#4a7c2f"],
         confidence: 0.9,
       }),
-      "gpt-4o-mini",
+      "gpt-5-mini",
     );
 
     expect(analysis).toMatchObject({
@@ -187,7 +187,7 @@ describe("parseAnalysis", () => {
       ocrText: null,
       dominantColors: ["#4a7c2f"],
       confidence: 0.9,
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
     });
   });
 

@@ -27,19 +27,28 @@ export interface GatewayConfig {
  * compatible endpoint without code changes.
  */
 export function gatewayConfigFromEnv(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
+  // Neon injects the gateway creds as NEON_AI_GATEWAY_BASE_URL / NEON_AI_GATEWAY_TOKEN; accept
+  // those first, then the older *_URL / *_API_KEY spellings and the generic OpenAI-compatible
+  // vars. Reading the wrong name is a silent "not configured" that surfaces only as failed
+  // analyses, so we accept every spelling the platform might use (same idea as the AWS_* storage
+  // fallbacks).
   const baseUrl =
+    env["NEON_AI_GATEWAY_BASE_URL"] ??
     env["NEON_AI_GATEWAY_URL"] ??
     env["AI_GATEWAY_BASE_URL"] ??
     env["OPENAI_BASE_URL"] ??
     undefined;
   const apiKey =
-    env["NEON_AI_GATEWAY_API_KEY"] ?? env["AI_GATEWAY_API_KEY"] ?? env["OPENAI_API_KEY"];
+    env["NEON_AI_GATEWAY_TOKEN"] ??
+    env["NEON_AI_GATEWAY_API_KEY"] ??
+    env["AI_GATEWAY_API_KEY"] ??
+    env["OPENAI_API_KEY"];
 
   if (!baseUrl || !apiKey) {
     throw new AiError(
       "AI provider is not configured. Neon injects AI Gateway credentials automatically when " +
-        "the branch has it enabled; otherwise set NEON_AI_GATEWAY_URL and " +
-        "NEON_AI_GATEWAY_API_KEY (or OPENAI_BASE_URL / OPENAI_API_KEY for a compatible endpoint).",
+        "the branch has it enabled; otherwise set NEON_AI_GATEWAY_BASE_URL and " +
+        "NEON_AI_GATEWAY_TOKEN (or OPENAI_BASE_URL / OPENAI_API_KEY for a compatible endpoint).",
       undefined,
       false,
     );

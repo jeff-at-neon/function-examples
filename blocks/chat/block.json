@@ -34,7 +34,7 @@
       "name": "CHAT_MODEL",
       "description": "Model id used for both /chat and /generate. Routed through the AI Gateway.",
       "required": false,
-      "default": "gpt-4o-mini"
+      "default": "gpt-5-mini"
     },
     {
       "name": "CHAT_MAX_INPUT_TOKENS",

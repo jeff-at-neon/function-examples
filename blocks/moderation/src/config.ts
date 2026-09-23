@@ -11,7 +11,7 @@ export const SPEC = {
   optional: {
     MODERATION_PREFIX: "uploads/",
     MODERATION_QUARANTINE_PREFIX: "quarantine/",
-    MODERATION_MODEL: "gpt-4o-mini",
+    MODERATION_MODEL: "gpt-5-mini",
     MODERATION_THRESHOLDS: '{"adult":0.5,"violence":0.6,"self_harm":0.4,"hate":0.4,"harassment":0.6}',
   },
 } as const;

@@ -82,7 +82,7 @@ index; text search uses a generated tsvector over OCR + caption, which cannot dr
 |---|---|---|
 | `VISION_BUCKET` | *required* | |
 | `VISION_PREFIX` | `uploads/` | Non-images here are recorded `skipped` — no suffix filter exists. |
-| `VISION_MODEL` | `gpt-4o-mini` | Must accept image input. |
+| `VISION_MODEL` | `gpt-5-mini` | Must accept image input. |
 | `VISION_OUTPUTS` | `tags,caption,altText,ocr` | All in **one** call: image tokens dominate, so five calls means paying for the image five times. |
 | `VISION_MAX_TAGS` | `12` | |
 | `VISION_MAX_BYTES` | `20971520` (20 MB) | |

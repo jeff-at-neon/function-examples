@@ -9,7 +9,7 @@ export const SPEC = {
   optional: {
     MEMORY_COMPACT_AT_TOKENS: "24000",
     MEMORY_KEEP_RECENT_TURNS: "10",
-    MEMORY_SUMMARY_MODEL: "gpt-4o-mini",
+    MEMORY_SUMMARY_MODEL: "gpt-5-mini",
     MEMORY_EMBEDDING_MODEL: "text-embedding-3-small",
     MEMORY_EMBEDDING_DIMENSIONS: "1536",
   },

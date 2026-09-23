@@ -41,7 +41,7 @@
       "name": "MEMORY_SUMMARY_MODEL",
       "description": "Model used to summarize compacted turns.",
       "required": false,
-      "default": "gpt-4o-mini"
+      "default": "gpt-5-mini"
     },
     {
       "name": "MEMORY_EMBEDDING_MODEL",

@@ -59,7 +59,7 @@
       "name": "VISION_MODEL",
       "description": "Vision-capable model. Must accept image inputs.",
       "required": false,
-      "default": "gpt-4o-mini"
+      "default": "gpt-5-mini"
     },
     {
       "name": "VISION_OUTPUTS",

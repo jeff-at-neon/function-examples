@@ -9,7 +9,7 @@ export const SPEC = {
   required: ["EXTRACT_BUCKET"],
   optional: {
     EXTRACT_PREFIX: "documents/",
-    EXTRACT_MODEL: "gpt-4o-mini",
+    EXTRACT_MODEL: "gpt-5-mini",
     EXTRACT_CONFIDENCE_THRESHOLD: "0.8",
     EXTRACT_MAX_BYTES: "20971520",
   },
