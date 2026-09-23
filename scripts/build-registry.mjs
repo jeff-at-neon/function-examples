@@ -163,7 +163,14 @@ for (const { manifest, dir } of blocks) {
     // A deployable zip with index.mjs at the ROOT — the layout the nodejs24 runtime's resolveEntry
     // expects (no subdirectory search). Contains the entry, migrations, and display metadata; env
     // and secrets are NOT included (sent separately by the deploy API), keeping the artifact inert.
-    await run("zip", ["-q", "-r", "-X", path.join(outDir, `${id}.zip`), "."], { cwd: templateDir });
+    //
+    // Reproducible: fix every entry's mtime to a constant and zip a sorted file list with -X (no
+    // extra attributes). Otherwise the archive embeds build-time timestamps, so identical content
+    // yields a different sha on every republish and integrity verification is meaningless.
+    await run("find", [".", "-exec", "touch", "-t", "202001010000", "{}", "+"], { cwd: templateDir });
+    const { stdout: fileList } = await run("sh", ["-c", "find . -type f | LC_ALL=C sort"], { cwd: templateDir });
+    const files = fileList.split("\n").filter((f) => f !== "");
+    await run("zip", ["-q", "-X", "-D", path.join(outDir, `${id}.zip`), ...files], { cwd: templateDir });
 
     // Digest + size for the console's integrity check and download UI.
     const zipContents = await readFile(path.join(outDir, `${id}.zip`));

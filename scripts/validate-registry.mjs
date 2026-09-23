@@ -12,6 +12,7 @@
  */
 
 import { readFile, access } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -115,6 +116,24 @@ for (const t of registry.templates ?? []) {
   for (const op of template.operations ?? []) {
     if (op.source && !(await exists(path.join(folder, op.source)))) {
       errors.push(`${t.path}: operation '${op.id}' source '${op.source}' is missing`);
+    }
+  }
+
+  // Integrity: the index's sha256/bytes must match the actual published zip, or the console's
+  // verification is checking a stale hash. Catches any drift between the index and the artifacts.
+  if (t.zip) {
+    const zipPath = path.join(dir, t.zip);
+    if (!(await exists(zipPath))) {
+      errors.push(`registry.json: zip '${t.zip}' for '${t.id}' does not resolve`);
+    } else {
+      const bytes = await readFile(zipPath);
+      const sha = createHash("sha256").update(bytes).digest("hex");
+      if (t.sha256 && t.sha256 !== sha) {
+        errors.push(`${t.id}: index sha256 ${t.sha256} != actual ${sha}`);
+      }
+      if (typeof t.bytes === "number" && t.bytes !== bytes.byteLength) {
+        errors.push(`${t.id}: index bytes ${t.bytes} != actual ${bytes.byteLength}`);
+      }
     }
   }
 }

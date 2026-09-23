@@ -167,6 +167,10 @@ platform function-deploy API (`POST .../functions/{slug}/deployments`, multipart
   complete install for an independent block. (Blocks with `dependsOn` still need their dependencies
   installed first; the installer orders the stack.)
 - Size cap is 32 MiB zipped; blocks are ~60–230 KB each.
+- **Reproducible:** the zips are built deterministically (fixed entry mtimes, sorted contents), so
+  identical block content always yields the same bytes and `sha256`. The index `sha256` therefore
+  stays stable across republishes, and `validate-registry.mjs` fails the build if any index hash
+  ≠ the actual zip.
 
 ## Generating and validating
 
