@@ -1,0 +1,50 @@
+{
+  "slug": "mcp",
+  "rank": 29,
+  "name": "MCP Server on Postgres",
+  "summary": "An MCP server over HTTP that exposes Postgres-backed tools to an AI agent (search_products, get_product), with JSON-RPC handling and a tool-call audit log.",
+  "schema": "blocks_mcp",
+  "billing": "free",
+  "depth": "scaffold",
+  "capabilities": [
+    "postgres"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon. The tools query it and the tool-call log is written here.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "MCP_SERVER_NAME",
+      "description": "Server name reported in the MCP initialize handshake.",
+      "required": false,
+      "default": "neon-mcp"
+    },
+    {
+      "name": "MCP_API_KEY",
+      "description": "Optional shared secret. When set, every request must send 'Authorization: Bearer <this value>'. An MCP endpoint has a public URL, so leaving this unset exposes the tools to anyone who finds it.",
+      "required": false,
+      "example": "a-long-random-string"
+    }
+  ],
+  "triggers": [],
+  "operations": [
+    {
+      "id": "mcp",
+      "title": "POST /mcp",
+      "description": "HTTP (JSON-RPC 2.0) — the MCP endpoint: initialize, tools/list, tools/call, ping",
+      "route": "/mcp",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
+    }
+  ]
+}

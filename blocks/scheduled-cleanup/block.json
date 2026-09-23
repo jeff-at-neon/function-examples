@@ -1,0 +1,77 @@
+{
+  "slug": "scheduled-cleanup",
+  "rank": 28,
+  "name": "Scheduled Cleanup Job",
+  "summary": "A cron-triggered Postgres maintenance job: expire trials, abandoned carts, stale sessions, or any time-bounded record, with an advisory lock and a run log so overlapping runs are safe and auditable.",
+  "schema": "blocks_scheduled_cleanup",
+  "billing": "free",
+  "depth": "implemented",
+  "capabilities": [
+    "postgres"
+  ],
+  "dependsOn": [],
+  "env": [
+    {
+      "name": "DATABASE_URL",
+      "description": "Branch connection string. Injected automatically by Neon.",
+      "required": true,
+      "injected": true
+    },
+    {
+      "name": "NEON_BLOCKS_TRIGGER_SECRET",
+      "description": "Shared secret appended to the trigger path as ?secret=. Neon does not sign trigger delivery, so this authenticates the cron POST rather than merely recognising it.",
+      "required": false,
+      "example": "a-long-random-string"
+    },
+    {
+      "name": "CLEANUP_BATCH_SIZE",
+      "description": "Maximum records expired per run. Bounds per-invocation cost; the next run picks up the remainder.",
+      "required": false,
+      "default": "500"
+    },
+    {
+      "name": "CLEANUP_DEFAULT_TTL_SECONDS",
+      "description": "Time-to-live applied by POST /register when a record is added without an explicit expiry.",
+      "required": false,
+      "default": "3600"
+    }
+  ],
+  "triggers": [
+    {
+      "type": "schedule",
+      "cron": "*/5 * * * *",
+      "functionPath": "/run",
+      "description": "Expire records whose deadline has passed and record the run. Every five minutes bounds how long a record lingers past its expiry."
+    }
+  ],
+  "operations": [
+    {
+      "id": "run",
+      "title": "POST /run",
+      "description": "cron, every 5 minutes — expire due records under an advisory lock, then log the run",
+      "route": "/run",
+      "recommended": true
+    },
+    {
+      "id": "preview",
+      "title": "GET /preview",
+      "description": "HTTP — dry run: how many records would expire right now, by kind",
+      "route": "/preview",
+      "recommended": true
+    },
+    {
+      "id": "register",
+      "title": "POST /register",
+      "description": "HTTP — register a record to expire (demo/producer side of the job)",
+      "route": "/register",
+      "recommended": true
+    },
+    {
+      "id": "health",
+      "title": "GET /health",
+      "description": "observability",
+      "route": "/health",
+      "recommended": false
+    }
+  ]
+}
