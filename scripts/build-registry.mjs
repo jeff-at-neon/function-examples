@@ -106,8 +106,10 @@ for (const { manifest, dir } of blocks) {
       provider: "neon",
       title: manifest.name,
       description: manifest.summary,
+      depth: manifest.depth,
       dependencies: [],
       dependsOn: manifest.dependsOn ?? [],
+      triggers: manifest.triggers ?? [],
       environment: toEnvironment(manifest.env),
       operations: manifest.operations.map((o) => ({
         id: o.id,

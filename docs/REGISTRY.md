@@ -60,8 +60,12 @@ The generator emits a servable tree (base URL = registry root):
   "provider": "neon",
   "title": "Outbox + Durable Job Queue",
   "description": "Postgres-backed job queue and event outbox: retries, backoff, DLQ, idempotency, concurrency caps.",
+  "depth": "implemented",
   "dependencies": [],
   "dependsOn": [],
+  "triggers": [
+    { "type": "schedule", "cron": "* * * * *", "functionPath": "/work", "description": "Drain the outbox and run due jobs." }
+  ],
   "environment": [
     { "name": "DATABASE_URL", "description": "Branch connection string.", "required": true, "injected": true, "secret": true },
     { "name": "NEON_BLOCKS_TRIGGER_SECRET", "description": "Shared secret appended to trigger paths as ?secret=. …", "required": false, "secret": true, "example": "a-long-random-string" },
@@ -86,6 +90,11 @@ The generator emits a servable tree (base URL = registry root):
   installs foundations first (`blocks_core`/`queue`); independent blocks have `[]`. Mirrored on each
   `registry.json` entry so the browse UI can show "installs N blocks" without fetching every
   template.
+- **`depth`** — `implemented` or `scaffold`. The console badges scaffolds so they aren't presented
+  as complete. (All shipped templates are currently `implemented`.)
+- **`triggers`** — the cron/storage triggers the block needs (`{type, functionPath, cron?,
+  bucketEnv?, description}`). The function-deploy API does **not** create these; the installer
+  creates them per entry after deploying, or the scheduled/`/reconcile` paths never fire.
 - **`environment`** — every variable the function reads, carrying everything a deploy form needs:
   - `name`, `description` (always present).
   - `required` (always present) — whether the form must collect a value.
@@ -126,7 +135,10 @@ platform function-deploy API (`POST .../functions/{slug}/deployments`, multipart
 - **Env/secrets are NOT in the zip** — they go in the deploy API's `environment` field, keeping the
   artifact inert and public-servable.
 - **Migrations ship inside the zip** (`migrations/…`, readable at `/opt/function/migrations` at
-  runtime) so a self-migrating handler can apply them on boot — the deploy API does not run them.
+  runtime). Every handler is **self-migrating**: `autoMigrate` (from `@neon-blocks/migrate`) applies
+  the block's own migrations once on first request, idempotently — so a bare function-deploy is a
+  complete install for an independent block. (Blocks with `dependsOn` still need their dependencies
+  installed first; the installer orders the stack.)
 - Size cap is 32 MiB zipped; blocks are ~60–230 KB each.
 
 ## Generating and validating

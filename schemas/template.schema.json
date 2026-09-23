@@ -12,6 +12,11 @@
 		"provider": { "type": "string" },
 		"title": { "type": "string", "minLength": 1 },
 		"description": { "type": "string", "minLength": 1 },
+		"depth": {
+			"type": "string",
+			"enum": ["scaffold", "implemented"],
+			"description": "Implementation depth. The console badges 'scaffold' templates so they are not presented as complete."
+		},
 		"dependencies": {
 			"type": "array",
 			"items": {
@@ -57,6 +62,23 @@
 						"type": "string",
 						"description": "Illustrative value for the form's placeholder. Not a default."
 					}
+				}
+			}
+		},
+		"triggers": {
+			"type": "array",
+			"description": "Cron and storage triggers the block needs. The function-deploy API does not create these; the installer creates them per entry after deploy.",
+			"items": {
+				"type": "object",
+				"required": ["type", "functionPath", "description"],
+				"additionalProperties": false,
+				"properties": {
+					"type": { "type": "string", "enum": ["schedule", "storage_object_created"] },
+					"functionPath": { "type": "string", "pattern": "^/[A-Za-z0-9\\-._~/]*$" },
+					"cron": { "type": "string" },
+					"bucketEnv": { "type": "string" },
+					"prefixEnv": { "type": "string" },
+					"description": { "type": "string", "minLength": 1 }
 				}
 			}
 		},
