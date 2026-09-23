@@ -5,7 +5,7 @@
   "summary": "Transactional email, SMS, and push behind provider adapters, with templates, per-user preferences, quiet hours, and digests.",
   "schema": "blocks_notifications",
   "billing": "free",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres",
     "neon_auth"
@@ -29,6 +29,12 @@
     {
       "name": "NOTIFY_EMAIL_FROM",
       "description": "Default From address.",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "NOTIFY_EMAIL_API_KEY",
+      "description": "API key for the email provider (e.g. Resend). Required when NOTIFY_EMAIL_PROVIDER is not 'none'.",
       "required": false,
       "default": ""
     },

@@ -30,7 +30,6 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   NotFoundError,
   parseTriggerEvent,
   problem,
@@ -39,105 +38,29 @@ import {
   type Logger,
 } from "@neon-blocks/core";
 import { StorageClient, detectKind, ObjectNotFoundError } from "@neon-blocks/storage";
+import { loadImagesConfig } from "./config.js";
+import { parseTransform, derivativeKeyFor } from "./transform.js";
+import { CodecNotConfiguredError, generateDerivative } from "./resize.js";
 
 const log: Logger = createLogger({ block: "image-derivatives" });
 
-const SPEC = {
-  block: "image-derivatives",
-  required: ["IMAGES_SOURCE_BUCKET"],
-  optional: {
-    IMAGES_SOURCE_PREFIX: "uploads/",
-    IMAGES_DERIVATIVE_BUCKET: "",
-    IMAGES_DERIVATIVE_PREFIX: "derived/",
-    IMAGES_MAX_PIXELS: "40000000",
-    IMAGES_MAX_BYTES: "26214400",
-    IMAGES_ALLOWED_WIDTHS: "64,128,256,512,1024,2048",
-    IMAGES_CACHE_CONTROL: "public, max-age=31536000, immutable",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
-
 const router = new Router();
 
-/**
- * Validate transform parameters against the allowlist.
- *
- * An allowlist rather than a range, deliberately. Arbitrary widths let a caller request 10,000
- * distinct sizes of one image and bill you for every one -- on a public endpoint that is a
- * cost-amplification attack, not a hypothetical.
- */
-export function parseTransform(
-  params: URLSearchParams,
-  allowedWidths: readonly number[],
-): { width: number; height: number | null; format: string; fit: string } {
-  const widthRaw = params.get("w");
-  if (!widthRaw) throw new ValidationError("?w= (width) is required");
-
-  const width = Number(widthRaw);
-  if (!allowedWidths.includes(width)) {
-    throw new ValidationError(
-      `Width ${widthRaw} is not permitted. Allowed: ${allowedWidths.join(", ")}. This is an ` +
-        `allowlist because arbitrary widths let a caller generate unlimited derivatives at your expense.`,
-    );
-  }
-
-  const heightRaw = params.get("h");
-  const height = heightRaw ? Number(heightRaw) : null;
-  if (height !== null && (!Number.isInteger(height) || height < 1 || height > 8192)) {
-    throw new ValidationError("?h= must be an integer between 1 and 8192");
-  }
-
-  const format = params.get("f") ?? "webp";
-  if (!["webp", "jpeg", "png", "avif"].includes(format)) {
-    throw new ValidationError("?f= must be one of webp, jpeg, png, avif");
-  }
-
-  const fit = params.get("fit") ?? "cover";
-  if (!["cover", "contain", "fill", "inside"].includes(fit)) {
-    throw new ValidationError("?fit= must be one of cover, contain, fill, inside");
-  }
-
-  return { width, height, format, fit };
-}
-
-/** Derivative key, derived from the source, the etag, and every transform parameter. */
-export function derivativeKeyFor(
-  prefix: string,
-  sourceKey: string,
-  etag: string,
-  t: { width: number; height: number | null; format: string; fit: string },
-): string {
-  const base = sourceKey.replace(/\.[^./]+$/, "").replace(/^.*\//, "");
-  const dims = t.height === null ? `w${t.width}` : `w${t.width}h${t.height}`;
-  // The etag is in the key, so an overwritten source cannot serve a stale derivative: the new etag
-  // simply misses and regenerates.
-  return `${prefix}${base}-${dims}-${t.fit}-${etag.slice(0, 8)}.${t.format}`;
-}
-
 router.get("/i/:key", async (_request, ctx) => {
-  const cfg = config();
+  const cfg = loadImagesConfig();
   const sourceKey = ctx.params["key"]!;
 
-  const allowedWidths = cfg
-    .get("IMAGES_ALLOWED_WIDTHS")
-    .split(",")
-    .map((w) => Number(w.trim()))
-    .filter((w) => Number.isInteger(w) && w > 0);
+  const transform = parseTransform(ctx.url.searchParams, cfg.allowedWidths);
 
-  const transform = parseTransform(ctx.url.searchParams, allowedWidths);
-
-  const sourceBucket = cfg.get("IMAGES_SOURCE_BUCKET");
-  const derivativeBucket = cfg.get("IMAGES_DERIVATIVE_BUCKET") || sourceBucket;
-  const derivativePrefix = cfg.get("IMAGES_DERIVATIVE_PREFIX");
+  const sourceBucket = cfg.sourceBucket;
+  const derivativeBucket = cfg.derivativeBucket;
+  const derivativePrefix = cfg.derivativePrefix;
 
   // §8, checked here as well as at startup. Writing derivatives into the watched bucket retriggers
   // the pipeline forever and there is no negative prefix filter to stop it.
   assertNoLoop({
     inputBucket: sourceBucket,
-    inputPrefix: cfg.get("IMAGES_SOURCE_PREFIX"),
+    inputPrefix: cfg.sourcePrefix,
     outputBucket: derivativeBucket,
     outputPrefix: derivativePrefix,
   });
@@ -157,12 +80,11 @@ router.get("/i/:key", async (_request, ctx) => {
     throw err;
   }
 
-  const maxBytes = cfg.int("IMAGES_MAX_BYTES", { min: 1024 });
-  if (sourceMeta.size > maxBytes) {
+  if (sourceMeta.size > cfg.maxBytes) {
     return problem(
       413,
       "source_too_large",
-      `Source is ${sourceMeta.size} bytes, over the ${maxBytes} limit. Functions run at a fixed ` +
+      `Source is ${sourceMeta.size} bytes, over the ${cfg.maxBytes} limit. Functions run at a fixed ` +
         `size, so there is no scaling up for large images.`,
     );
   }
@@ -192,33 +114,44 @@ router.get("/i/:key", async (_request, ctx) => {
         location: storage.presignGet(derivativeBucket, cached[0].derivative_key, {
           expiresInSeconds: 3600,
         }),
-        "cache-control": cfg.get("IMAGES_CACHE_CONTROL"),
+        "cache-control": cfg.cacheControl,
       },
     });
   }
 
-  void derivativeKey;
-
-  // TODO(image-derivatives): the resize.
-  //   1. GET the source, bounded by IMAGES_MAX_BYTES
-  //   2. read dimensions and reject if width*height > IMAGES_MAX_PIXELS. This must happen BEFORE
-  //      decoding: a 40KB PNG can decode to 30000x30000 and exhaust memory instantly, which a byte
-  //      limit does not catch.
-  //   3. resize with WASM libvips (default) or native sharp (opt-in, needs bundler: "none" plus a
-  //      platform-matched node_modules -- and unbundled deploys cannot ship TypeScript)
-  //   4. strip EXIF and GPS unconditionally. A phone photo carries the coordinates where it was
-  //      taken, and serving that with an avatar is a privacy leak nobody remembers to handle.
-  //   5. PUT to derivativeBucket/derivativeKey and record the row as ready
-  //
-  //   Without a CDN in front of this endpoint every request is a billed invocation.
-  //   Transform-on-read is only economical with edge caching.
-  return problem(
-    501,
-    "not_implemented",
-    "Resizing is not yet wired. See the TODO in src/index.ts. The cache lookup, loop guard, and " +
-      "dimension validation above are real; the WASM-vs-native choice determines packaging, since " +
-      "the default esbuild bundle cannot load native .node binaries.",
-  );
+  // Cache miss: generate. The pixel-budget bomb guard runs BEFORE decode and EXIF/GPS is stripped
+  // (pure, tested); the pixel resize runs through the configured codec adapter.
+  try {
+    const result = await generateDerivative(
+      { db: pool, storage },
+      {
+        sourceBucket,
+        sourceKey,
+        sourceEtag: sourceMeta.etag,
+        derivativeBucket,
+        derivativeKey,
+        transform,
+        maxBytes: cfg.maxBytes,
+        maxPixels: cfg.maxPixels,
+      },
+    );
+    if (result.status === "rejected") {
+      return problem(422, "rejected", result.reason ?? "image rejected");
+    }
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: storage.presignGet(derivativeBucket, derivativeKey, { expiresInSeconds: 3600 }),
+        "cache-control": cfg.cacheControl,
+      },
+    });
+  } catch (err) {
+    if (err instanceof CodecNotConfiguredError) {
+      // Honest boundary: guards ran and the row is recorded, but no codec is installed to resize.
+      return problem(503, "codec_not_configured", err.message);
+    }
+    throw err;
+  }
 });
 
 router.post("/reconcile", async (request) => {
@@ -228,15 +161,15 @@ router.post("/reconcile", async (request) => {
     return problem(400, "wrong_trigger", `/reconcile expects a schedule trigger, got ${event.type}`);
   }
 
-  const cfg = config();
+  const cfg = loadImagesConfig();
   const storage = StorageClient.fromEnv();
   const pool = getPool();
-  const sourceBucket = cfg.get("IMAGES_SOURCE_BUCKET");
+  const sourceBucket = cfg.sourceBucket;
 
   // No storage delete events exist, so orphans are detected by absence. Without this a deleted
   // source leaves its derivatives on disk forever and you keep paying for them.
   const listing = await storage.listObjects(sourceBucket, {
-    prefix: cfg.get("IMAGES_SOURCE_PREFIX"),
+    prefix: cfg.sourcePrefix,
     maxKeys: 1000,
   });
 
@@ -266,15 +199,35 @@ router.post("/reconcile", async (request) => {
     [sourceBucket, listing.objects.map((o) => o.key)],
   );
 
-  // TODO(image-derivatives): delete orphaned objects from storage, then their rows. Marking works;
-  // the storage delete does not, so orphaned bytes are still being paid for -- v_status reports
-  // orphaned_bytes so that cost is visible rather than silent.
+  // Delete a bounded batch of orphaned derivatives from storage, then their rows, so orphaned bytes
+  // stop accruing cost. Bounded per run (§6) rather than deleting everything in one invocation.
+  const { rows: orphans } = await pool.query<{ id: string; derivative_bucket: string; derivative_key: string }>(
+    `SELECT id, derivative_bucket, derivative_key
+     FROM blocks_image_derivatives.derivatives
+     WHERE status = 'orphaned'
+     ORDER BY orphaned_at
+     LIMIT 500`,
+  );
+  let deleted = 0;
+  for (const o of orphans) {
+    try {
+      await storage.deleteObject(o.derivative_bucket, o.derivative_key);
+      await pool.query(`DELETE FROM blocks_image_derivatives.derivatives WHERE id = $1`, [o.id]);
+      deleted++;
+    } catch (err) {
+      log.warn("failed to delete orphaned derivative", {
+        key: o.derivative_key,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return json({
     ok: true,
     scheduledAt: event.scheduledAt,
     sourcesScanned: listing.objects.length,
     orphansMarked: marked ?? 0,
-    note: marked ? "Orphans marked; storage deletion is not yet wired." : undefined,
+    orphansDeleted: deleted,
   });
 });
 
@@ -353,3 +306,9 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadImagesConfig, SPEC } from "./config.js";
+export { parseTransform, derivativeKeyFor } from "./transform.js";
+export { readImageDimensions, withinPixelBudget, stripJpegMetadata } from "./image.js";
+export { generateDerivative, setCodec, CodecNotConfiguredError } from "./resize.js";

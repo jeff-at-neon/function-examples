@@ -24,7 +24,6 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   NotFoundError,
   parseTriggerEvent,
   problem,
@@ -33,23 +32,11 @@ import {
   type Logger,
 } from "@neon-blocks/core";
 import { StorageClient, detectKind, ObjectNotFoundError } from "@neon-blocks/storage";
+import { defaultChat } from "@neon-blocks/ai";
+import { loadModerationConfig } from "./config.js";
+import { classifyImageItem, classifyTextItem } from "./run.js";
 
 const log: Logger = createLogger({ block: "moderation" });
-
-const SPEC = {
-  block: "moderation",
-  required: ["MODERATION_BUCKET"],
-  optional: {
-    MODERATION_PREFIX: "uploads/",
-    MODERATION_QUARANTINE_PREFIX: "quarantine/",
-    MODERATION_MODEL: "gpt-4o-mini",
-    MODERATION_THRESHOLDS: "{\"adult\":0.5,\"violence\":0.6,\"self_harm\":0.4,\"hate\":0.4,\"harassment\":0.6}",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -60,18 +47,18 @@ router.post("/scan", async (request) => {
     return problem(400, "wrong_trigger", `/scan expects a storage trigger, got ${event.type}`);
   }
 
-  const cfg = config();
-  if (event.bucketName !== cfg.get("MODERATION_BUCKET")) {
+  const cfg = loadModerationConfig();
+  if (event.bucketName !== cfg.bucket) {
     return problem(403, "wrong_bucket", "This function only moderates its configured bucket");
   }
 
   // §8: quarantined objects are moved within storage, so the quarantine prefix must be disjoint from
   // the watched prefix or moving an object would retrigger moderation of itself, forever.
   assertNoLoop({
-    inputBucket: cfg.get("MODERATION_BUCKET"),
-    inputPrefix: cfg.get("MODERATION_PREFIX"),
-    outputBucket: cfg.get("MODERATION_BUCKET"),
-    outputPrefix: cfg.get("MODERATION_QUARANTINE_PREFIX"),
+    inputBucket: cfg.bucket,
+    inputPrefix: cfg.prefix,
+    outputBucket: cfg.bucket,
+    outputPrefix: cfg.quarantinePrefix,
   });
 
   const storage = StorageClient.fromEnv();
@@ -99,25 +86,21 @@ router.post("/scan", async (request) => {
     [event.bucketName, event.objectKey, metadata.etag, kind === "unknown" ? "other" : kind],
   );
 
-  // TODO(moderation): classification.
-  //   1. for images: presign a short-lived GET and ask the vision model for per-category scores
-  //   2. for text: classify content_text
-  //   3. compare each score against MODERATION_THRESHOLDS -- per category, since adult, violence,
-  //      and self-harm warrant different thresholds
-  //   4. all clear -> status 'approved'; any breach -> 'blocked' and move the object under
-  //      MODERATION_QUARANTINE_PREFIX; borderline -> 'needs_review'
-  //   5. record a decisions row with source='model'
-  //
-  //   Malware scanning is NOT part of this: it needs a real engine (ClamAV or a scanning API) and
-  //   cannot be done by an LLM. malware_status stays 'unscanned'.
-  return json({
-    ok: true,
-    itemId: rows[0]?.id ?? null,
-    status: "quarantined",
-    note:
-      "Recorded and quarantined. Classification is not yet wired -- see the TODO in src/index.ts. " +
-      "The item stays quarantined, which is the fail-closed direction.",
-  });
+  const itemId = rows[0]?.id;
+  // No row means this (bucket,key,etag) was already recorded — deliberate, not an error.
+  if (!itemId) return json({ ok: true, status: "skipped", reason: "already recorded" });
+
+  // Only images are classified by the vision model. Other kinds (video, document) stay quarantined
+  // — fail-closed — with malware scanning explicitly out of scope (needs a real engine, not an LLM).
+  if (kind !== "image") {
+    return json({ ok: true, itemId, status: "quarantined", reason: `${kind} is not model-classifiable here` });
+  }
+
+  const decision = await classifyImageItem(
+    { db: getPool(), storage, chat: defaultChat({ model: cfg.model }) },
+    { itemId, bucket: event.bucketName, key: event.objectKey, cfg },
+  );
+  return json({ ok: true, itemId, status: decision.status, flagged: decision.flagged });
 });
 
 router.post("/text", async (request) => {
@@ -129,13 +112,15 @@ router.post("/text", async (request) => {
      VALUES ($1, 'text', 'quarantined') RETURNING id`,
     [text.slice(0, 100_000)],
   );
+  const itemId = rows[0]?.id;
+  if (!itemId) return problem(500, "item_not_created", "Could not record the item");
 
-  // TODO(moderation): text classification. Same threshold comparison as /scan.
-  return json({
-    itemId: rows[0]?.id,
-    status: "quarantined",
-    note: "Text classification is not yet wired. The item is quarantined, not approved.",
-  }, { status: 202 });
+  const cfg = loadModerationConfig();
+  const decision = await classifyTextItem(
+    { db: getPool(), chat: defaultChat({ model: cfg.model }) },
+    { itemId, text, cfg },
+  );
+  return json({ itemId, status: decision.status, flagged: decision.flagged }, { status: 202 });
 });
 
 router.post("/reconcile", async (request) => {
@@ -260,3 +245,8 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadModerationConfig, SPEC } from "./config.js";
+export { parseThresholds, buildImagePrompt, buildTextPrompt, extractScores, decide } from "./classify.js";
+export { classifyImageItem, classifyTextItem, moveToQuarantine } from "./run.js";

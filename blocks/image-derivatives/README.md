@@ -4,9 +4,11 @@ Thumbnails and transforms with EXIF stripping, generated on read and cached, not
 
 **Block 23 of 25**, numbered in build order.
 
-> **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
-> `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
-> explanation rather than failing in a way that looks like a bug.
+> **Status: implemented.** Schema, safety checks, control flow, and the safety logic (header-based
+> decompression-bomb guard, EXIF/GPS stripping, cache + orphan reconcile) are all wired, with pure
+> unit tests. The pixel resize runs through a Codec adapter (WASM libvips or equivalent) supplied at
+> deploy — the esbuild bundle cannot ship a native binary — so `/i/:key` returns 503 until a codec
+> is installed. Still unverified against a live Neon project.
 
 ## Why this block
 

@@ -25,30 +25,17 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   parseTriggerEvent,
   problem,
   Router,
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
-
+import { loadHealthConfig } from "./config.js";
+import { assessConnectionPressure, capacityCostNote } from "./capacity.js";
+import { runSchemaDrift } from "./drift-run.js";
 
 const log: Logger = createLogger({ block: "db-health" });
-
-const SPEC = {
-  block: "db-health",
-  optional: {
-    HEALTH_SLOW_QUERY_MS: "100",
-    HEALTH_BLOAT_WARN_PCT: "20",
-    HEALTH_MIN_TABLE_BYTES: "10485760",
-    HEALTH_SNAPSHOT_RETENTION_DAYS: "90",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -59,7 +46,7 @@ router.post("/snapshot", async (request) => {
     return problem(400, "wrong_trigger", `/snapshot expects a schedule trigger, got ${event.type}`);
   }
 
-  const cfg = config();
+  const cfg = loadHealthConfig();
   const pool = getPool();
 
   // Check availability before querying. pg_stat_statements needs shared_preload_libraries, which is
@@ -117,7 +104,7 @@ router.post("/snapshot", async (request) => {
        AND NOT i.indisprimary
        AND pg_relation_size(s.indexrelid) > $2
        AND s.schemaname NOT LIKE 'blocks_%'`,
-    [snapshotId, cfg.int("HEALTH_MIN_TABLE_BYTES", { min: 0 })],
+    [snapshotId, cfg.minTableBytes],
   );
   findingsRecorded += unused ?? 0;
 
@@ -144,8 +131,8 @@ router.post("/snapshot", async (request) => {
        AND pg_relation_size(relid) > $3`,
     [
       snapshotId,
-      cfg.int("HEALTH_BLOAT_WARN_PCT", { min: 1, max: 100 }),
-      cfg.int("HEALTH_MIN_TABLE_BYTES", { min: 0 }),
+      cfg.bloatWarnPct,
+      cfg.minTableBytes,
     ],
   );
   findingsRecorded += bloat ?? 0;
@@ -186,25 +173,49 @@ router.post("/snapshot", async (request) => {
          AND query NOT LIKE '%pg_stat_statements%'
        ORDER BY mean_exec_time DESC
        LIMIT 100`,
-      [snapshotId, cfg.int("HEALTH_SLOW_QUERY_MS", { min: 1 })],
+      [snapshotId, cfg.slowQueryMs],
     );
     slowQueries = rowCount ?? 0;
   }
 
-  // TODO(db-health): the two remaining checks.
-  //   * schema drift against a parent branch. The Neon-specific one and the most valuable: it catches
-  //     the migration applied in dev and forgotten in prod. Needs a second connection to the parent,
-  //     and credentials for that are not something a block can assume it has.
-  //   * capacity-hours cost monitor. Active is 4x waiting, NOT 40x -- the free tier's 10:400 split is
-  //     a quota ratio and is widely misread. Flagging CPU-bound functions is how a user learns which
-  //     of their blocks are expensive. Needs invocation data this block cannot read, so it could only
-  //     ever be an estimate.
+  // Capacity signals. Connection pressure is directly observable; capacity-hours (active vs. idle
+  // CU) needs invocation data a SQL function cannot read, so that finding reports size and says so
+  // rather than faking a compute estimate.
+  const { rows: caps } = await pool.query<{ conns: number; max_conns: number; db_bytes: string }>(
+    `SELECT (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database()) AS conns,
+            current_setting('max_connections')::int AS max_conns,
+            pg_database_size(current_database())::bigint AS db_bytes`,
+  );
+  const cap = caps[0];
+  if (cap) {
+    const pressure = assessConnectionPressure(cap.conns, cap.max_conns);
+    const capacityFindings = [capacityCostNote(Number(cap.db_bytes)), ...(pressure ? [pressure] : [])];
+    for (const f of capacityFindings) {
+      await pool.query(
+        `INSERT INTO blocks_db_health.findings (snapshot_id, kind, severity, object_name, detail, metrics)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+        [snapshotId, f.kind, f.severity, f.objectName, f.detail, JSON.stringify(f.metrics)],
+      );
+      findingsRecorded++;
+    }
+  }
+
+  // Schema drift against the parent branch — the Neon-specific check. Only runs when a parent
+  // connection is configured; a block cannot assume it has one.
+  let driftChecked = false;
+  if (cfg.parentDatabaseUrl) {
+    driftChecked = true;
+    findingsRecorded += await runSchemaDrift(pool, {
+      snapshotId,
+      parentDatabaseUrl: cfg.parentDatabaseUrl,
+    });
+  }
 
   // Prune old snapshots. Findings and query_stats cascade with them.
   await pool.query(
     `DELETE FROM blocks_db_health.snapshots
      WHERE taken_at < now() - make_interval(days => $1::int)`,
-    [cfg.int("HEALTH_SNAPSHOT_RETENTION_DAYS", { min: 1, max: 3_650 })],
+    [cfg.retentionDays],
   );
 
   const result = {
@@ -212,6 +223,7 @@ router.post("/snapshot", async (request) => {
     findingsRecorded,
     slowQueriesRecorded: slowQueries,
     statementsExtAvailable: hasStatements,
+    schemaDriftChecked: driftChecked,
   };
   log.info("health snapshot complete", result);
 
@@ -339,3 +351,8 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadHealthConfig, SPEC } from "./config.js";
+export { buildCatalogSql, diffCatalogs } from "./drift.js";
+export { assessConnectionPressure, capacityCostNote } from "./capacity.js";

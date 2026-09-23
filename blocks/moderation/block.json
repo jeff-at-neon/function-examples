@@ -5,7 +5,7 @@
   "summary": "Classifies uploads and text for abuse, and quarantines by default so unreviewed content is never served.",
   "schema": "blocks_moderation",
   "billing": "meter",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres",
     "object_storage",

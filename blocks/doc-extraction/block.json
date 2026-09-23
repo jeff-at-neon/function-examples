@@ -5,7 +5,7 @@
   "summary": "Invoices, receipts, and forms become typed rows with per-field confidence and a human-review queue.",
   "schema": "blocks_doc_extraction",
   "billing": "meter",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres",
     "object_storage",

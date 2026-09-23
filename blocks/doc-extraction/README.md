@@ -4,9 +4,10 @@ Invoices, receipts, and forms become typed rows with per-field confidence and a 
 
 **Block 16 of 25**, numbered in build order.
 
-> **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
-> `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
-> explanation rather than failing in a way that looks like a bug.
+> **Status: implemented.** Schema, safety checks, control flow, and the core logic (schema-driven
+> prompt, tolerant JSON parse, and per-field confidence routing to a review queue) are all wired,
+> with pure unit tests. Extraction calls a vision model through the Neon AI Gateway. Still
+> unverified against a live Neon project.
 
 ## Why this block
 

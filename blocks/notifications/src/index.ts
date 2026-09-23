@@ -22,32 +22,19 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   parseTriggerEvent,
   problem,
   Router,
   ValidationError,
   type Logger,
 } from "@neon-blocks/core";
-
+import { loadNotifyConfig } from "./config.js";
+import { parseQuietHours, releaseAfterQuietHours } from "./quiet-hours.js";
+import { renderTemplate } from "./render.js";
+import { selectEmailProvider } from "./providers.js";
+import { buildDigestMessage } from "./digest.js";
 
 const log: Logger = createLogger({ block: "notifications" });
-
-const SPEC = {
-  block: "notifications",
-  optional: {
-    NOTIFY_EMAIL_PROVIDER: "none",
-    NOTIFY_EMAIL_FROM: "",
-    NOTIFY_SMS_PROVIDER: "none",
-    NOTIFY_DEDUPE_WINDOW_MINUTES: "60",
-    NOTIFY_QUIET_HOURS_DEFAULT: "22:00-08:00",
-    NOTIFY_BATCH_SIZE: "50",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -82,16 +69,29 @@ router.post("/notify", async (request) => {
     return json({ status: "suppressed", reason: "user disabled this channel and category" });
   }
 
-  // TODO(notifications): quiet-hours evaluation and digest routing.
-  //   * parse quiet_hours (HH:MM-HH:MM) in the user's timezone, handling windows that cross midnight
-  //   * if inside, set status='deferred' and deferred_until to the window's end -- deferred, never
-  //     dropped
-  //   * if pref.cadence = 'digest', set status='digested' for /digest to collect
-  // Cron is UTC-only, so the user's local release time must be computed at send time.
+  // Quiet-hours and digest routing. Cron is UTC-only, so the local release time is computed here
+  // from the user's timezone and stored; nothing is dropped, only deferred or digested.
+  const cfg = loadNotifyConfig();
+  let status = "pending";
+  let deferredUntil: Date | null = null;
+
+  if (pref?.cadence === "digest") {
+    status = "digested";
+  } else {
+    const window = parseQuietHours(pref?.quiet_hours ?? cfg.quietHoursDefault);
+    if (window) {
+      const release = releaseAfterQuietHours(new Date(), pref?.timezone ?? "UTC", window);
+      if (release) {
+        status = "deferred";
+        deferredUntil = release;
+      }
+    }
+  }
+
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO blocks_notifications.notifications
-       (user_ref, channel, category, template_code, destination, variables, dedupe_key)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+       (user_ref, channel, category, template_code, destination, variables, dedupe_key, status, deferred_until)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
      ON CONFLICT DO NOTHING
      RETURNING id`,
     [
@@ -100,12 +100,15 @@ router.post("/notify", async (request) => {
       destination,
       JSON.stringify(body["variables"] ?? {}),
       typeof body["dedupeKey"] === "string" ? body["dedupeKey"] : null,
+      status,
+      deferredUntil,
     ],
   );
 
   const id = rows[0]?.id;
   // No row means the dedupe key matched a live notification -- deliberate, not an error.
-  return json({ status: id ? "queued" : "deduplicated", id: id ?? null }, { status: id ? 202 : 200 });
+  if (!id) return json({ status: "deduplicated", id: null });
+  return json({ status, id, deferredUntil }, { status: 202 });
 });
 
 router.post("/send", async (request) => {
@@ -116,7 +119,7 @@ router.post("/send", async (request) => {
   }
 
   const pool = getPool();
-  const cfg = config();
+  const cfg = loadNotifyConfig();
 
   // Release deferred notifications whose quiet window has passed. Complete and useful on its own.
   const { rowCount: released } = await pool.query(
@@ -125,35 +128,69 @@ router.post("/send", async (request) => {
      WHERE status = 'deferred' AND deferred_until <= now()`,
   );
 
-  const { rows: due } = await pool.query(
-    `SELECT id, channel, destination, template_code, variables
-     FROM blocks_notifications.notifications
-     WHERE status = 'pending'
-     ORDER BY created_at
+  const { rows: due } = await pool.query<{
+    id: string;
+    channel: string;
+    destination: string;
+    template_code: string | null;
+    variables: Record<string, unknown>;
+    subject: string | null;
+    tmpl_body: string | null;
+  }>(
+    `SELECT n.id, n.channel, n.destination, n.template_code, n.variables,
+            t.subject, t.body AS tmpl_body
+     FROM blocks_notifications.notifications n
+     LEFT JOIN blocks_notifications.templates t ON t.code = n.template_code
+     WHERE n.status = 'pending'
+     ORDER BY n.created_at
      FOR UPDATE SKIP LOCKED
      LIMIT $1`,
-    [cfg.int("NOTIFY_BATCH_SIZE", { min: 1, max: 500 })],
+    [cfg.batchSize],
   );
 
-  // TODO(notifications): render and dispatch.
-  //   * render the template with escaping appropriate to the channel. Naive replace() on user data
-  //     is an HTML injection vector in email, which is why this is not a one-liner.
-  //   * dispatch through providers/<name>.ts behind one interface (Resend or SES, Twilio or SNS)
-  //   * record provider_message_id, or increment attempts and set error
-  if (due.length > 0 && cfg.get("NOTIFY_EMAIL_PROVIDER") === "none") {
-    log.warn("notifications are due but no provider is configured", { due: due.length });
+  // Render (channel-appropriate escaping) and dispatch through the provider adapter. The HTTP send
+  // is the one part that cannot run offline; everything shaping the message is pure and tested.
+  const provider = selectEmailProvider(cfg);
+  let sent = 0;
+  let failed = 0;
+
+  for (const n of due) {
+    try {
+      if (n.channel !== "email") throw new Error(`no provider configured for channel "${n.channel}"`);
+      if (n.tmpl_body == null) throw new Error(`template "${n.template_code}" not found`);
+      const message = renderTemplate({ subject: n.subject, body: n.tmpl_body }, n.variables, n.channel);
+      const { providerMessageId } = await provider.send({
+        channel: n.channel,
+        to: n.destination,
+        from: cfg.emailFrom,
+        ...(message.subject !== undefined ? { subject: message.subject } : {}),
+        body: message.body,
+      });
+      await pool.query(
+        `UPDATE blocks_notifications.notifications
+         SET status = 'sent', provider_message_id = $2, sent_at = now() WHERE id = $1`,
+        [n.id, providerMessageId],
+      );
+      sent++;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Retry a few times, then dead-letter to 'failed' so a poison message stops churning.
+      await pool.query(
+        `UPDATE blocks_notifications.notifications
+         SET attempts = attempts + 1, error = $2,
+             status = CASE WHEN attempts + 1 >= 3 THEN 'failed' ELSE status END
+         WHERE id = $1`,
+        [n.id, message],
+      );
+      failed++;
+    }
   }
 
-  return json({
-    ok: true,
-    scheduledAt: event.scheduledAt,
-    released: released ?? 0,
-    due: due.length,
-    sent: 0,
-    note: due.length > 0
-      ? "Provider adapters are not yet wired; see the TODO in src/index.ts."
-      : undefined,
-  });
+  if (due.length > 0 && cfg.emailProvider === "none") {
+    log.warn("notifications are due but no email provider is configured", { due: due.length });
+  }
+
+  return json({ ok: true, scheduledAt: event.scheduledAt, released: released ?? 0, due: due.length, sent, failed });
 });
 
 router.post("/digest", async (request) => {
@@ -163,16 +200,74 @@ router.post("/digest", async (request) => {
     return problem(400, "wrong_trigger", `/digest expects a schedule trigger, got ${event.type}`);
   }
 
-  // TODO(notifications): collapse 'digested' notifications per (user, category) into one send.
-  // Ten comments on a thread should be one email, not ten.
-  const { rows } = await getPool().query<{ user_ref: string; category: string; n: string }>(
-    `SELECT user_ref, category, count(*)::text AS n
-     FROM blocks_notifications.notifications
-     WHERE status = 'digested'
-     GROUP BY user_ref, category`,
+  // Collapse 'digested' notifications per (user, category) into one send. Ten comments on a thread
+  // become one email, not ten.
+  const pool = getPool();
+  const cfg = loadNotifyConfig();
+  const provider = selectEmailProvider(cfg);
+
+  const { rows: items } = await pool.query<{
+    id: string;
+    user_ref: string;
+    category: string;
+    channel: string;
+    destination: string;
+    variables: Record<string, unknown>;
+    subject: string | null;
+    tmpl_body: string | null;
+  }>(
+    `SELECT n.id, n.user_ref, n.category, n.channel, n.destination, n.variables,
+            t.subject, t.body AS tmpl_body
+     FROM blocks_notifications.notifications n
+     LEFT JOIN blocks_notifications.templates t ON t.code = n.template_code
+     WHERE n.status = 'digested'
+     ORDER BY n.created_at`,
   );
 
-  return json({ ok: true, scheduledAt: event.scheduledAt, pendingDigests: rows.length, groups: rows });
+  // Group by (user_ref, category) — the unit a digest collapses to.
+  const groups = new Map<string, typeof items>();
+  for (const it of items) {
+    const key = `${it.user_ref} ${it.category}`;
+    const list = groups.get(key) ?? [];
+    list.push(it);
+    groups.set(key, list);
+  }
+
+  let digestsSent = 0;
+  for (const [, group] of groups) {
+    const first = group[0];
+    if (!first) continue;
+    const rendered = group.map((it) => ({
+      subject: it.subject,
+      body: it.tmpl_body ? renderTemplate({ subject: it.subject, body: it.tmpl_body }, it.variables, it.channel).body : "",
+    }));
+    const digest = buildDigestMessage(first.category, rendered);
+    const ids = group.map((it) => it.id);
+    try {
+      if (first.channel !== "email") throw new Error(`digest only supports email, not "${first.channel}"`);
+      const { providerMessageId } = await provider.send({
+        channel: "email",
+        to: first.destination,
+        from: cfg.emailFrom,
+        subject: digest.subject,
+        body: digest.body,
+      });
+      await pool.query(
+        `UPDATE blocks_notifications.notifications
+         SET status = 'sent', provider_message_id = $2, sent_at = now() WHERE id = ANY($1)`,
+        [ids, providerMessageId],
+      );
+      digestsSent++;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await pool.query(
+        `UPDATE blocks_notifications.notifications SET error = $2 WHERE id = ANY($1)`,
+        [ids, message],
+      );
+    }
+  }
+
+  return json({ ok: true, scheduledAt: event.scheduledAt, groups: groups.size, digestsSent });
 });
 
 router.get("/preferences", async (_request, ctx) => {
@@ -242,3 +337,10 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadNotifyConfig, SPEC } from "./config.js";
+export { parseQuietHours, isWithinQuietHours, minutesUntilEnd, localMinutes, releaseAfterQuietHours } from "./quiet-hours.js";
+export { escapeHtml, renderString, renderTemplate } from "./render.js";
+export { buildDigestMessage } from "./digest.js";
+export { selectEmailProvider } from "./providers.js";

@@ -4,9 +4,11 @@ Slow-query digest, unused-index and bloat detection, long-transaction alerts, an
 
 **Block 25 of 25**, numbered in build order.
 
-> **Status: scaffold.** Schema, safety checks, and control flow are real and reviewable. The marked
-> `TODO` seams are the remaining work, and unimplemented endpoints return `501` with a specific
-> explanation rather than failing in a way that looks like a bug.
+> **Status: implemented.** Slow-query, unused-index, bloat, long-transaction, connection-pressure,
+> and schema-drift checks are all wired, with pure unit tests over the drift diff and capacity
+> assessment. Schema drift runs when `HEALTH_PARENT_DATABASE_URL` is set (a second connection to the
+> parent branch); capacity is storage + connections only, since compute-hours need invocation data a
+> SQL function cannot read. Still unverified against a live Neon project.
 
 ## Why this block
 

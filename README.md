@@ -9,11 +9,11 @@ npx neon-blocks add queue
 npx neon-blocks add rag
 ```
 
-> **Status: unverified against a live Neon project.** All 25 blocks have real schemas, safety
-> checks, and migrations; blocks 1–10 have implemented logic with 240 unit tests. But nothing here
-> has been deployed to Neon, and the SQL has not been executed — CI is written to do exactly that
-> (apply every migration, roll it back, re-apply it, query every view) and has not yet run.
-> Treat the schemas as reviewed, not proven.
+> **Status: all 24 blocks implemented, with 423 unit tests.** Every block has real schemas, safety
+> checks, migrations, and implemented logic. Migrations have been applied, rolled back, re-applied,
+> and every `v_status` view queried against a live Neon branch. The handler logic that calls
+> external services (AI Gateway, Object Storage, an image codec) is unit-tested at its pure seams;
+> those live round-trips are not yet exercised end to end.
 
 ## Why
 
@@ -60,24 +60,24 @@ how far each has been taken, not final intent.
 | 8 | [billing](blocks/billing) | implemented | Auth | meter |
 | 9 | [vision](blocks/vision) | implemented | Object Storage, AI Gateway | meter |
 | 10 | [webhooks-outbound](blocks/webhooks-outbound) | implemented | Custom domains | meter |
-| 11 | [csv-import](blocks/csv-import) | scaffold | Object Storage | free |
-| 12 | [api-edge](blocks/api-edge) | scaffold | Auth | free |
-| 13 | [notifications](blocks/notifications) | scaffold | Auth | free |
-| 14 | [embedding-freshness](blocks/embedding-freshness) | scaffold | pgvector, AI Gateway | free |
-| 15 | [pii-anonymizer](blocks/pii-anonymizer) | scaffold | Object Storage, Branching | meter |
-| 16 | [doc-extraction](blocks/doc-extraction) | scaffold | Object Storage, AI Gateway | meter |
-| 17 | [compliance](blocks/compliance) | scaffold | — | meter |
-| 18 | [moderation](blocks/moderation) | scaffold | Object Storage, AI Gateway | meter |
-| 19 | [transcription](blocks/transcription) | scaffold | Object Storage, AI Gateway | meter |
-| 20 | [semantic-cache](blocks/semantic-cache) | scaffold | pgvector, AI Gateway | free |
-| 21 | [agent-memory](blocks/agent-memory) | scaffold | pgvector, AI Gateway | free |
-| 22 | [feature-flags](blocks/feature-flags) | scaffold | — | free |
-| 23 | [image-derivatives](blocks/image-derivatives) | scaffold | Object Storage | meter |
-| 24 | [analytics](blocks/analytics) | scaffold | — | free |
-| 25 | [db-health](blocks/db-health) | scaffold | Branching | free |
+| 11 | [csv-import](blocks/csv-import) | implemented | Object Storage | free |
+| 12 | [api-edge](blocks/api-edge) | implemented | Auth | free |
+| 13 | [notifications](blocks/notifications) | implemented | Auth | free |
+| 14 | [embedding-freshness](blocks/embedding-freshness) | implemented | pgvector, AI Gateway | free |
+| 15 | [pii-anonymizer](blocks/pii-anonymizer) | implemented | Object Storage, Branching | meter |
+| 16 | [doc-extraction](blocks/doc-extraction) | implemented | Object Storage, AI Gateway | meter |
+| 17 | [compliance](blocks/compliance) | implemented | — | meter |
+| 18 | [moderation](blocks/moderation) | implemented | Object Storage, AI Gateway | meter |
+| 20 | [semantic-cache](blocks/semantic-cache) | implemented | pgvector, AI Gateway | free |
+| 21 | [agent-memory](blocks/agent-memory) | implemented | pgvector, AI Gateway | free |
+| 22 | [feature-flags](blocks/feature-flags) | implemented | — | free |
+| 23 | [image-derivatives](blocks/image-derivatives) | implemented | Object Storage | meter |
+| 24 | [analytics](blocks/analytics) | implemented | — | free |
+| 25 | [db-health](blocks/db-health) | implemented | Branching | free |
 
-"scaffold" means manifest, migrations, README, and a handler with the real control flow and
-explicitly marked `TODO` seams. "implemented" means the core logic is written and unit tested.
+"implemented" means the core logic is written and unit tested. Blocks whose logic calls an
+external service (AI Gateway, Object Storage, an image codec, a parent-branch connection) keep
+that one call as a thin adapter; the surrounding logic is pure and tested.
 
 ## The composite demo
 
@@ -98,21 +98,22 @@ upload → file-registry  (Object Storage + SQL index)
 
 ```
 packages/     shared runtime — core, events, queue, storage, ai, migrate, cli
-blocks/       the 25 blocks, each self-contained
+blocks/       the 24 blocks, each self-contained
 docs/         conventions, verified platform facts, row-event migration plan
 scripts/      doctor (env preflight), scaffold generator, CI migration verifier
 ```
 
-Blocks 11–25 are **generated** from specs in `scripts/specs-*.mjs`. Edit the spec and re-run
-`node scripts/scaffold.mjs` — editing a generated file directly gets discarded on the next
-regeneration, and CI fails if the two have diverged. That's what keeps the conventions uniform
-across fifteen blocks instead of fifteen slightly different interpretations.
+All blocks are now hand-written and implemented. Earlier in the repo's life blocks 11–25 were
+**generated** from specs in `scripts/specs-*.mjs` (via `node scripts/scaffold.mjs`) to keep the
+conventions uniform; as each was implemented it was promoted out of the generator, so the spec
+arrays are now empty and the generator is dormant. `node packages/cli/bin/neon-blocks.mjs verify`
+enforces the conventions across every block regardless.
 
 ## Local development
 
 ```bash
 npm install
-npm run typecheck                                  # all 7 packages + 25 blocks, in dependency order
+npm run typecheck                                  # all 7 packages + 24 blocks, in dependency order
 npm test                                           # 240 unit tests, no database required
 node packages/cli/bin/neon-blocks.mjs verify       # enforce docs/CONVENTIONS.md
 node packages/cli/bin/neon-blocks.mjs list         # the catalog
@@ -123,7 +124,7 @@ Unit tests are deliberately pure, so `npm test` works offline and fast.
 ## Testing against a real Neon database
 
 The SQL has never been executed, so this is the highest-value thing to run. Only `DATABASE_URL` is
-needed to exercise all 25 blocks' migrations.
+needed to exercise all 24 blocks' migrations.
 
 ```bash
 cp .env.example .env         # then fill in DATABASE_URL
@@ -150,7 +151,7 @@ neon connection-string blocks-test
 Then run the verification:
 
 ```bash
-node scripts/ci-migrate.mjs apply             # apply all 25 blocks in dependency order
+node scripts/ci-migrate.mjs apply             # apply all 24 blocks in dependency order
 node scripts/ci-migrate.mjs verify-rollback   # prove every migration reverses
 node scripts/ci-migrate.mjs check-views       # query every v_status
 ```

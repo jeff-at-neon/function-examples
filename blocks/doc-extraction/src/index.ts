@@ -23,7 +23,6 @@ import {
   createLogger,
   getPool,
   json,
-  loadConfig,
   NotFoundError,
   parseTriggerEvent,
   problem,
@@ -32,23 +31,11 @@ import {
   type Logger,
 } from "@neon-blocks/core";
 import { StorageClient, detectKind, ObjectNotFoundError } from "@neon-blocks/storage";
+import { defaultChat } from "@neon-blocks/ai";
+import { loadExtractConfig } from "./config.js";
+import { runExtraction } from "./run.js";
 
 const log: Logger = createLogger({ block: "doc-extraction" });
-
-const SPEC = {
-  block: "doc-extraction",
-  required: ["EXTRACT_BUCKET"],
-  optional: {
-    EXTRACT_PREFIX: "documents/",
-    EXTRACT_MODEL: "gpt-4o-mini",
-    EXTRACT_CONFIDENCE_THRESHOLD: "0.8",
-    EXTRACT_MAX_BYTES: "20971520",
-  },
-} as const;
-
-function config() {
-  return loadConfig(SPEC);
-}
 
 const router = new Router();
 
@@ -76,8 +63,8 @@ router.post("/extract", async (request) => {
     return problem(400, "wrong_trigger", `/extract expects a storage trigger, got ${event.type}`);
   }
 
-  const cfg = config();
-  if (event.bucketName !== cfg.get("EXTRACT_BUCKET")) {
+  const cfg = loadExtractConfig();
+  if (event.bucketName !== cfg.bucket) {
     return problem(403, "wrong_bucket", "This function only handles its configured bucket");
   }
 
@@ -101,9 +88,8 @@ router.post("/extract", async (request) => {
     throw err;
   }
 
-  const maxBytes = cfg.int("EXTRACT_MAX_BYTES", { min: 1024 });
-  if (metadata.size > maxBytes) {
-    log.capped("document too large to extract", { size: metadata.size, maxBytes });
+  if (metadata.size > cfg.maxBytes) {
+    log.capped("document too large to extract", { size: metadata.size, maxBytes: cfg.maxBytes });
     return json({ ok: true, status: "skipped", reason: "over size limit" });
   }
 
@@ -119,20 +105,15 @@ router.post("/extract", async (request) => {
     });
   }
 
-  // TODO(doc-extraction): the extraction call.
-  //   1. load the schema for this document type and generate a prompt from schemas.fields --
-  //      including each field's description, which is prompt text as much as documentation
-  //   2. request a per-field confidence alongside each value, not one document-level score
-  //   3. parse tolerantly, mirroring block 9's extractJsonObject (fences, prose, nested braces)
-  //   4. fields below EXTRACT_CONFIDENCE_THRESHOLD go to review_queue; the rest apply.
-  //      That split is what makes this save labour rather than relocate it.
-  //   5. set status to 'needs_review' when any field queued, else 'ready'
-  return problem(
-    501,
-    "not_implemented",
-    "Extraction is not yet wired. See the TODO in src/index.ts. The confidence-per-field split and " +
-      "the review queue are the design decisions that matter and are already in the schema.",
+  // Generate a prompt from the schema's fields, call the vision model through the Neon AI Gateway,
+  // parse tolerantly, and split by per-field confidence — fields below the threshold go to the
+  // review queue, the rest apply. The prompt/parse/split are pure and tested; the model call is the
+  // thin edge.
+  const result = await runExtraction(
+    { db: getPool(), storage, chat: defaultChat({ model: cfg.model }) },
+    { event: { bucketName: event.bucketName, objectKey: event.objectKey, etag: metadata.etag }, cfg },
   );
+  return json({ ok: true, ...result });
 });
 
 router.post("/reconcile", async (request) => {
@@ -246,3 +227,8 @@ function requireString(body: Record<string, unknown>, key: string): string {
 export default {
   fetch: (request: Request): Promise<Response> => router.handle(request),
 };
+
+// Re-exported so unit tests can import the pure logic directly.
+export { loadExtractConfig, SPEC } from "./config.js";
+export { schemaCodeFromKey, buildExtractionPrompt, extractJsonObject, splitByConfidence } from "./extract.js";
+export { runExtraction } from "./run.js";

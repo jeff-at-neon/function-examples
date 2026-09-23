@@ -5,7 +5,7 @@
   "summary": "Slow-query digest, unused-index and bloat detection, long-transaction alerts, and trend comparison across snapshots.",
   "schema": "blocks_db_health",
   "billing": "free",
-  "depth": "scaffold",
+  "depth": "implemented",
   "capabilities": [
     "postgres",
     "branching"
@@ -46,6 +46,12 @@
       "name": "NEON_BLOCKS_TRIGGER_SECRET",
       "description": "Shared secret authenticating trigger delivery. Neon does not sign trigger POSTs.",
       "required": false
+    },
+    {
+      "name": "HEALTH_PARENT_DATABASE_URL",
+      "description": "Direct connection string for the parent branch, enabling schema-drift detection. Optional.",
+      "required": false,
+      "default": ""
     }
   ],
   "triggers": [

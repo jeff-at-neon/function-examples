@@ -87,9 +87,6 @@
       "path": "blocks/semantic-cache"
     },
     {
-      "path": "blocks/transcription"
-    },
-    {
       "path": "blocks/vision"
     },
     {
